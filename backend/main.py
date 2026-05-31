@@ -7,16 +7,23 @@ schools_list = [
     {"name": "Harvard", "state": "MA"}
 ]
 
+states_list = [
+    {"name": "Massachusettes", "abr": 'MA'},
+    {"name": "California", "abr": "CA"}
+]
+
 @app.get("/")
-def read_root():
-    return{"message": "Welcome to College Copilot"}
+def greet():
+    return {"message": "Welcome to College Copilot"}
 
 @app.get("/schools")
-def get_schools():
+def schools():
     return schools_list
 
 @app.get("/health")
-def health_check():
+def health():
     return {"status": "healthy"}
 
-
+@app.get("/states")
+def state():
+    return states_list

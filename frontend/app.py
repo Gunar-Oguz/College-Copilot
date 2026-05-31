@@ -7,3 +7,8 @@ if st.button("Get Schools"):
     response = requests.get("http://localhost:8000/schools")
     schools = response.json()
     st.write(schools)
+
+if st.button("Get States"):
+    response = requests.get("http://localhost:8000/states")
+    states = response.json()
+    st.write(states)
