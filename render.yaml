@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: collegecopilot
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: COLLEGE_SCORECARD_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: collegecopilot-db
+          property: connectionString
+
+databases:
+  - name: collegecopilot-db
+    plan: free

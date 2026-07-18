@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>CollegeCopilot</title>
+  <style>
+    :root {
+      --bg: #f0f2f8;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #007aff;
+      --user-bg: #007aff;
+      --user-text: #ffffff;
+      --ai-bg: #e9e9eb;
+      --ai-text: #0f172a;
+      --shadow: none;
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+      z-index: 50;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    #chat {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 16px;
+      padding-bottom: 100px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    #messages {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .empty-state {
+      margin: auto;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.95rem;
+      max-width: 360px;
+      line-height: 1.6;
+      padding: 24px;
+    }
+
+    .empty-state strong {
+      display: block;
+      color: var(--text);
+      font-size: 1.05rem;
+      margin-bottom: 8px;
+    }
+
+    .message {
+      display: flex;
+      flex-direction: column;
+      max-width: 75%;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      align-items: flex-end;
+    }
+
+    .message.ai {
+      align-self: flex-start;
+      align-items: flex-start;
+    }
+
+    .bubble {
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      line-height: 1.5;
+      font-size: 0.95rem;
+      word-break: break-word;
+    }
+
+    .message.user .bubble {
+      background: var(--user-bg);
+      color: var(--user-text);
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.ai .bubble {
+      background: var(--ai-bg);
+      color: var(--ai-text);
+      border: none;
+      border-bottom-left-radius: 4px;
+      box-shadow: none;
+    }
+
+    .message-label {
+      display: none;
+    }
+
+    .ai-message p { margin-bottom: 0.6em; }
+    .ai-message p:last-child { margin-bottom: 0; }
+    .ai-message ul, .ai-message ol { margin: 0.4em 0 0.6em 1.2em; }
+    .ai-message li { margin-bottom: 0.25em; }
+    .ai-message strong { color: #1e3a8a; }
+    .ai-message h3, .ai-message h4 { margin: 0.8em 0 0.3em; font-size: 0.95rem; }
+    .ai-message hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+
+    .ai-message .table-wrap {
+      overflow-x: auto;
+      margin: 0.5em 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .ai-message table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    .ai-message th, .ai-message td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ai-message th {
+      background: #d1d5db;
+      font-weight: 600;
+      color: #1e293b;
+      white-space: nowrap;
+    }
+
+    .ai-message tr:last-child td { border-bottom: none; }
+
+    .loading-bubble {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      padding: 10px 14px;
+      background: var(--ai-bg);
+      border: none;
+      border-radius: var(--radius);
+      border-bottom-left-radius: 4px;
+      font-size: 0.875rem;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid #dbeafe;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-bubble {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      max-width: 480px;
+    }
+
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 200;
+      box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.1);
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      max-width: 820px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    textarea {
+      flex: 1;
+      resize: none;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font: inherit;
+      font-size: 0.925rem;
+      line-height: 1.5;
+      min-height: 48px;
+      max-height: 120px;
+      background: #fff;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+    }
+
+    button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 12px;
+      background: var(--primary);
+      color: #fff;
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.925rem;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      align-self: flex-end;
+      white-space: nowrap;
+    }
+
+    button:hover:not(:disabled) { opacity: 0.9; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    @media (max-width: 600px) {
+      .message { max-width: 92%; }
+      header h1 { font-size: 1rem; }
+      button { padding: 12px 14px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo-icon" aria-hidden="true">🎓</div>
+    <div>
+      <h1>CollegeCopilot</h1>
+      <p>AI-powered college search for admissions counselors</p>
+    </div>
+  </header>
+
+  <main id="chat" aria-live="polite">
+    <div id="messages">
+      <div class="empty-state" id="empty-state">
+        <strong>Ask anything about US colleges</strong>
+        Try: "Top 10 schools with lowest acceptance rate" or "Compare Harvard, Yale, and Princeton on cost and earnings"
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="input-row">
+      <textarea
+        id="question"
+        rows="1"
+        placeholder="Ask a question about colleges..."
+        aria-label="Your question"
+      ></textarea>
+      <button id="send-btn" type="button">Send</button>
+    </div>
+  </footer>
+
+  <script>
+    const API_URL = "/ask";
+    const chat = document.getElementById("chat");
+    const messages = document.getElementById("messages");
+    const emptyState = document.getElementById("empty-state");
+    const questionInput = document.getElementById("question");
+    const sendBtn = document.getElementById("send-btn");
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function inlineFormat(text) {
+      return escapeHtml(text)
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.+?)\*/g, "<em>$1</em>");
+    }
+
+    function isTableRow(line) {
+      const t = line.trim();
+      return t.startsWith("|") && t.endsWith("|");
+    }
+
+    function isTableSeparator(line) {
+      const t = line.trim();
+      return /^\|?[\s\-:|]+\|?$/.test(t) && t.includes("-");
+    }
+
+    function parseTableRow(line) {
+      return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
+    }
+
+    function renderTable(tableLines) {
+      const headerCells = parseTableRow(tableLines[0]);
+      let dataStart = tableLines[1] && isTableSeparator(tableLines[1]) ? 2 : 1;
+      const header = headerCells.map(c => `<th>${inlineFormat(c)}</th>`).join("");
+      const rows = tableLines.slice(dataStart)
+        .filter(isTableRow)
+        .map(line => `<tr>${parseTableRow(line).map(c => `<td>${inlineFormat(c)}</td>`).join("")}</tr>`)
+        .join("");
+      return `<div class="table-wrap"><table><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+
+    function formatResponse(text) {
+      const lines = text.split("\n");
+      const parts = [];
+      let listType = null, listItems = [], i = 0;
+
+      function flushList() {
+        if (!listItems.length) return;
+        parts.push(`<${listType === "ol" ? "ol" : "ul"}>${listItems.join("")}</${listType === "ol" ? "ol" : "ul"}>`);
+        listItems = []; listType = null;
+      }
+
+      while (i < lines.length) {
+        const line = lines[i].trim();
+        if (!line) { flushList(); i++; continue; }
+
+        if (isTableRow(line)) {
+          flushList();
+          const tableLines = [];
+          while (i < lines.length && (isTableRow(lines[i].trim()) || isTableSeparator(lines[i].trim()))) {
+            tableLines.push(lines[i].trim()); i++;
+          }
+          parts.push(renderTable(tableLines));
+          continue;
+        }
+
+        if (/^-{3,}$/.test(line)) { flushList(); parts.push("<hr>"); i++; continue; }
+
+        const bullet = line.match(/^[-*•]\s+(.*)/);
+        const numbered = line.match(/^\d+\.\s+(.*)/);
+        const heading = line.match(/^#{1,3}\s+(.*)/);
+
+        if (bullet) {
+          if (listType !== "ul") { flushList(); listType = "ul"; }
+          listItems.push(`<li>${inlineFormat(bullet[1])}</li>`);
+        } else if (numbered) {
+          if (listType !== "ol") { flushList(); listType = "ol"; }
+          listItems.push(`<li>${inlineFormat(numbered[1])}</li>`);
+        } else {
+          flushList();
+          parts.push(heading
+            ? `<h3>${inlineFormat(heading[1])}</h3>`
+            : `<p>${inlineFormat(line)}</p>`);
+        }
+        i++;
+      }
+      flushList();
+      return parts.join("");
+    }
+
+    function scrollToBottom(smooth = true) {
+      chat.scrollTo({
+        top: chat.scrollHeight,
+        behavior: smooth ? "smooth" : "instant",
+      });
+    }
+
+    function clearInput() {
+      questionInput.value = "";
+      questionInput.style.height = "auto";
+    }
+
+    function appendMessage(role, content, isHtml = false) {
+      if (emptyState) emptyState.remove();
+      const wrap = document.createElement("div");
+      wrap.className = `message ${role}`;
+      wrap.innerHTML = `<div class="bubble ${role === "ai" ? "ai-message" : ""}">${isHtml ? content : escapeHtml(content)}</div>`;
+      messages.appendChild(wrap);
+      requestAnimationFrame(() => scrollToBottom());
+      return wrap;
+    }
+
+    function showLoading() {
+      if (emptyState) emptyState.remove();
+      const el = document.createElement("div");
+      el.className = "message ai";
+      el.id = "loading-msg";
+      el.innerHTML = `
+        <div class="loading-bubble">
+          <div class="spinner" aria-hidden="true"></div>
+          <span>Searching colleges...</span>
+        </div>
+      `;
+      messages.appendChild(el);
+      requestAnimationFrame(() => scrollToBottom());
+    }
+
+    function removeLoading() {
+      document.getElementById("loading-msg")?.remove();
+    }
+
+    function showError(message) {
+      removeLoading();
+      const el = document.createElement("div");
+      el.className = "message ai";
+      el.innerHTML = `<div class="error-bubble">${escapeHtml(message)}</div>`;
+      messages.appendChild(el);
+      requestAnimationFrame(() => scrollToBottom());
+    }
+
+    async function sendQuestion() {
+      const question = questionInput.value.trim();
+      if (!question) { questionInput.focus(); return; }
+
+      appendMessage("user", question);
+      clearInput();
+      sendBtn.disabled = true;
+      showLoading();
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+        });
+        const data = await res.json();
+        removeLoading();
+
+        if (!res.ok) {
+          const detail = data.detail || "Something went wrong.";
+          showError(typeof detail === "string" ? detail : JSON.stringify(detail));
+          return;
+        }
+
+        appendMessage("ai", formatResponse(data.response), true);
+      } catch {
+        removeLoading();
+        showError("Could not reach the server. Make sure the backend is running.");
+      } finally {
+        sendBtn.disabled = false;
+        questionInput.focus();
+        scrollToBottom();
+      }
+    }
+
+    sendBtn.addEventListener("click", sendQuestion);
+
+    questionInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendQuestion();
+      }
+    });
+
+    questionInput.addEventListener("input", () => {
+      questionInput.style.height = "auto";
+      questionInput.style.height = Math.min(questionInput.scrollHeight, 120) + "px";
+    });
+  </script>
+</body>
+</html>
