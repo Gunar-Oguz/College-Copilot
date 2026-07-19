@@ -312,6 +312,11 @@ def parse_args():
         action="store_true",
         help="Drop and recreate the programs table before loading",
     )
+    parser.add_argument(
+        "--schema-only",
+        action="store_true",
+        help="Drop and recreate the programs table, then exit (no API load)",
+    )
     return parser.parse_args()
 
 
@@ -319,6 +324,15 @@ def main():
     args = parse_args()
     if args.start_year > args.end_year:
         raise SystemExit("--start-year must be <= --end-year")
+
+    if args.schema_only:
+        conn = get_db_connection()
+        try:
+            recreate_table(conn)
+            print_earnings_coverage(conn)
+        finally:
+            conn.close()
+        return
 
     api_key = os.getenv("COLLEGE_SCORECARD_API_KEY")
     if not api_key:
