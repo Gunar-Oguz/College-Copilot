@@ -36,7 +36,7 @@ SCHEMA_PATH = ROOT_DIR / "data" / "programs_schema.sql"
 INSERT_SQL = """
 INSERT INTO programs (
     school_id, year, cip_code, program_name, credential_level, credential_name,
-    earnings_median_1yr, earnings_median_2yr, debt_median, debt_monthly_payment,
+    earnings_median_1yr, earnings_median_4yr, debt_median, debt_monthly_payment,
     completion_rate
 ) VALUES (
     %s, %s, %s, %s, %s, %s,
@@ -108,7 +108,7 @@ def program_row(school_id: int, year_label: str, program: dict) -> tuple | None:
         credential_level,
         credential.get("title"),
         _nested(program, "earnings", "1_yr", "overall_median_earnings"),
-        _nested(program, "earnings", "2_yr", "overall_median_earnings"),
+        _nested(program, "earnings", "4_yr", "overall_median_earnings"),
         debt.get("median"),
         debt.get("median_payment"),
         None,  # completion_rate not published at program level in Scorecard API
@@ -269,6 +269,28 @@ def load_programs(
         print(f"  done — inserted {inserted:,} programs")
         print_row_counts(conn, year_label)
         print()
+
+    print_earnings_coverage(conn)
+
+
+def print_earnings_coverage(conn):
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT year,
+                   COUNT(earnings_median_1yr) AS has_1yr,
+                   COUNT(earnings_median_4yr) AS has_4yr
+            FROM programs
+            GROUP BY year
+            ORDER BY year
+            """
+        )
+        rows = cursor.fetchall()
+    if not rows:
+        return
+    print("Earnings coverage by year:")
+    for year, has_1yr, has_4yr in rows:
+        print(f"  {year}: 1yr={has_1yr:,}  4yr={has_4yr:,}")
 
 
 def parse_args():

@@ -6,8 +6,9 @@ __pycache__/
 *.log
 logs/
 
-# Data files
-data/
+# Data files (keep schema SQL tracked)
+data/*
+!data/*.sql
 
 # Environment
 .env
