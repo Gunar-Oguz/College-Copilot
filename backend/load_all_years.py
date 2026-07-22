@@ -85,8 +85,15 @@ def api_year_range(start_year: int, end_year: int) -> list[tuple[int, str]]:
     ]
 
 
+def api_prefix(api_year: int) -> str:
+    """Latest year uses 'latest.' prefix in the Scorecard API; historical years use the year."""
+    if api_year >= LAST_ACADEMIC_YEAR:
+        return "latest"
+    return str(api_year)
+
+
 def fields_for_api_year(api_year: int) -> str:
-    prefix = str(api_year)
+    prefix = api_prefix(api_year)
     return ",".join([
         "id",
         "school.name",
@@ -127,7 +134,7 @@ def fields_for_api_year(api_year: int) -> str:
 
 
 def _get(school: dict, api_year: int, suffix: str):
-    return school.get(f"{api_year}.{suffix}")
+    return school.get(f"{api_prefix(api_year)}.{suffix}")
 
 
 def _income_75_110k(school: dict, api_year: int):
@@ -310,6 +317,11 @@ def parse_args():
         help=f"Last API year prefix (default: {LAST_ACADEMIC_YEAR} = {academic_year_label(LAST_ACADEMIC_YEAR)})",
     )
     parser.add_argument(
+        "--recreate",
+        action="store_true",
+        help="Drop and recreate the schools table before loading",
+    )
+    parser.add_argument(
         "--no-recreate",
         action="store_true",
         help="Do not drop/recreate the schools table before loading",
@@ -338,7 +350,7 @@ def main():
             api_key,
             args.start_year,
             args.end_year,
-            recreate=not args.no_recreate,
+            recreate=args.recreate and not args.no_recreate,
             skip_existing=args.skip_existing,
         )
         print_year_summary(conn)
