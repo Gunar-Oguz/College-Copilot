@@ -144,6 +144,10 @@ def _income_75_110k(school: dict, api_year: int):
     )
 
 
+def _as_bool(value):
+    return bool(value) if value is not None else None
+
+
 def school_row(school: dict, year_label: str, api_year: int) -> tuple:
     size = _get(school, api_year, "student.size")
     return (
@@ -177,7 +181,7 @@ def school_row(school: dict, year_label: str, api_year: int) -> tuple:
         _get(school, api_year, "student.part_time_share"),
         _get(school, api_year, "student.demographics.age_entry"),
         _get(school, api_year, "student.demographics.female_share"),
-        school.get("school.online_only"),
+        _as_bool(school.get("school.online_only")),
         school.get("school.degrees_awarded.highest"),
         school.get("school.carnegie_basic"),
         _get(school, api_year, "earnings.6_yrs_after_entry.median"),

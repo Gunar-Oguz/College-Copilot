@@ -45,14 +45,26 @@ def test_school_row_extracts_latest_earnings_for_2024():
     assert row[18] == 124080  # earnings_median_10yr
 
 
-def test_school_row_extracts_historical_earnings():
+def test_school_row_converts_online_only_to_bool():
     school = {
-        "id": 243744,
-        "school.name": "Stanford University",
-        "2020.earnings.10_yrs_after_entry.median": 98000,
-        "2020.student.size": 16000,
+        "id": 1,
+        "school.name": "Test U",
+        "latest.student.size": 100,
+        "school.online_only": 0,
     }
 
-    row = school_row(school, "2020-21", 2020)
+    row = school_row(school, "2024-25", LAST_ACADEMIC_YEAR)
 
-    assert row[18] == 98000
+    assert row[30] is False
+
+
+def test_school_row_keeps_none_online_only():
+    school = {
+        "id": 1,
+        "school.name": "Test U",
+        "latest.student.size": 100,
+    }
+
+    row = school_row(school, "2024-25", LAST_ACADEMIC_YEAR)
+
+    assert row[30] is None
