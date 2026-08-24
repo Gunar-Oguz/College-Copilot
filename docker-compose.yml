@@ -1,0 +1,24 @@
+services:
+  database:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: collegecopilot
+      POSTGRES_PASSWORD: localdev123
+      POSTGRES_DB: collegecopilot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://collegecopilot:localdev123@database:5432/collegecopilot
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - database
+  volumes:
+  postgres_data:
+
+
+
+
