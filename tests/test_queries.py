@@ -46,6 +46,25 @@ class TestBasicQueries:
         assert plan.kind == "meta"
         assert plan.use_claude is False
 
+    def test_meta_question_extracts_california(self):
+        parsed = parse_question("How many schools are in California?")
+        assert parsed.kind == "meta"
+        assert parsed.states == ["CA"]
+
+    def test_meta_question_sql_filters_by_state(self):
+        plan = _plan("How many schools are in California?")
+        assert plan.kind == "meta"
+        assert "state = %s" in plan.sql
+        assert "CA" in plan.params
+        assert "total_schools" in plan.sql
+        assert "2024-25" in plan.params
+
+    def test_meta_question_no_state_counts_all(self):
+        plan = _plan("How many schools are in the database?")
+        assert plan.kind == "meta"
+        assert "state =" not in plan.sql
+        assert "state IN" not in plan.sql
+
     def test_top5_lowest_acceptance_rate_limit(self):
         rows = _rows("Top 5 by lowest acceptance rate")
         assert len(rows) == 5

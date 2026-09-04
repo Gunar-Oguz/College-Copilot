@@ -4,7 +4,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from query_parser import ParsedQuery, parse_question
-from sql_builder import QueryPlan, build_query_plan
+from sql_builder import QueryPlan, build_meta_sql, build_query_plan
 
 
 def get_db_connection():
@@ -20,20 +20,15 @@ def get_db_connection():
     )
 
 
-def fetch_meta_stats() -> dict:
+def fetch_meta_stats(states: list[str] | None = None) -> dict:
+    parsed = ParsedQuery(kind="meta", question="", states=states or [])
+    sql, params = build_meta_sql(parsed)
+
     conn = get_db_connection()
     try:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT COUNT(*), COUNT(DISTINCT state)
-                FROM schools
-                WHERE year = %s
-                """,
-                ("2024-25",),
-            )
-            total, states = cursor.fetchone()
-            return {"total_schools": total, "unique_states": states}
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(sql, params)
+            return dict(cursor.fetchone())
     finally:
         conn.close()
 
@@ -81,9 +76,6 @@ def enforce_parsed_filters(rows: list[dict], parsed: ParsedQuery) -> list[dict]:
 
 
 def execute_plan(plan: QueryPlan) -> list[dict]:
-    if plan.kind == "meta":
-        return [fetch_meta_stats()]
-
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
@@ -91,6 +83,9 @@ def execute_plan(plan: QueryPlan) -> list[dict]:
             rows = cursor.fetchall()
     finally:
         conn.close()
+
+    if plan.kind == "meta":
+        return [dict(row) for row in rows]
 
     return enforce_parsed_filters(rows, plan.parsed)
 

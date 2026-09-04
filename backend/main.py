@@ -138,7 +138,7 @@ def ask(request: AskRequest):
 
     t_sql = time.perf_counter()
 
-    if not schools and plan.kind != "list":
+    if not schools and plan.kind not in ("list", "meta"):
         raise HTTPException(status_code=500, detail="No schools found in database")
 
     if plan.kind == "meta":
