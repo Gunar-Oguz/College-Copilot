@@ -588,7 +588,7 @@ def parse_question(question: str) -> ParsedQuery:
     limit = _extract_limit(question)
 
     if _is_meta_question(question):
-        return ParsedQuery(kind="meta", question=question)
+        return ParsedQuery(kind="meta", question=question, states=states)
 
     if school_patterns and ("compare" in q or len(school_patterns) > 1):
         return ParsedQuery(

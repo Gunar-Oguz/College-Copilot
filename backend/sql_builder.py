@@ -141,10 +141,31 @@ def build_count_sql(
     return f"SELECT COUNT(*) FROM schools {where_sql}", params
 
 
+def build_meta_sql(parsed: ParsedQuery) -> tuple[str, list]:
+    """Build COUNT query for meta questions, honoring state filters."""
+    where_clauses = ["year = %s"]
+    params: list = [DEFAULT_ACADEMIC_YEAR]
+
+    if len(parsed.states) == 1:
+        where_clauses.append("state = %s")
+        params.append(parsed.states[0])
+    elif len(parsed.states) > 1:
+        placeholders = ", ".join(["%s"] * len(parsed.states))
+        where_clauses.append(f"state IN ({placeholders})")
+        params.extend(parsed.states)
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}"
+    sql = (
+        "SELECT COUNT(*) AS total_schools, COUNT(DISTINCT state) AS unique_states "
+        f"FROM schools {where_sql}"
+    )
+    return sql, params
+
+
 def build_sql(parsed: ParsedQuery) -> tuple[str, list]:
     """Step 2: Build precise SQL from structured filters."""
     if parsed.kind == "meta":
-        return "", []
+        return build_meta_sql(parsed)
 
     where_clauses, params = build_where_clauses(parsed)
 
@@ -199,10 +220,13 @@ def build_query_plan(question: str) -> QueryPlan:
 
     parsed = parse_question(question)
     if parsed.kind == "meta":
+        sql, params = build_meta_sql(parsed)
         return QueryPlan(
             kind="meta",
             question=question,
             parsed=parsed,
+            sql=sql,
+            params=params,
             use_claude=False,
         )
 
