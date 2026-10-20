@@ -1,14 +1,12 @@
 services:
   - type: web
     name: collegecopilot
-    runtime: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
     envVars:
       - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: COLLEGE_SCORECARD_API_KEY
         sync: false
       - key: DATABASE_URL
         fromDatabase:
@@ -18,3 +16,4 @@ services:
 databases:
   - name: collegecopilot-db
     plan: free
+    postgresMajorVersion: "17"
