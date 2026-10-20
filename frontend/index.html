@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>CollegeCopilot</title>
   <style>
     :root {
       --bg: #f0f2f8;
       --surface: #ffffff;
+      --surface-2: #f6f7fa;
       --border: #e2e8f0;
       --text: #0f172a;
       --muted: #64748b;
@@ -15,8 +17,12 @@
       --user-bg: #007aff;
       --user-text: #ffffff;
       --ai-bg: #e9e9eb;
-      --ai-text: #0f172a;
-      --shadow: none;
+      --series-1: #2a78d6;
+      --track: #eef1f6;
+      --best-bg: #e8f5e9;
+      --best-text: #1b5e20;
+      --ref-bg: #fff6e5;
+      --ref-text: #7a4a00;
       --radius: 18px;
     }
 
@@ -36,6 +42,7 @@
       background: var(--surface);
       border-bottom: 1px solid var(--border);
       padding: 16px 20px;
+      padding-top: calc(16px + env(safe-area-inset-top, 0px));
       display: flex;
       align-items: center;
       gap: 12px;
@@ -53,16 +60,8 @@
       font-size: 18px;
     }
 
-    header h1 {
-      font-size: 1.1rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-
-    header p {
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
+    header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
+    header p { font-size: 0.8rem; color: var(--muted); }
 
     #chat {
       flex: 1;
@@ -70,48 +69,61 @@
       overflow-y: auto;
       overflow-x: hidden;
       padding: 16px;
-      padding-bottom: 100px;
-      -webkit-overflow-scrolling: touch;
+      padding-bottom: 110px;
     }
 
     #messages {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
+      max-width: 880px;
+      margin: 0 auto;
     }
 
     .empty-state {
-      margin: auto;
+      margin: 40px auto 0;
       text-align: center;
       color: var(--muted);
       font-size: 0.95rem;
-      max-width: 360px;
+      max-width: 560px;
       line-height: 1.6;
-      padding: 24px;
+      padding: 24px 8px;
     }
 
     .empty-state strong {
       display: block;
       color: var(--text);
-      font-size: 1.05rem;
-      margin-bottom: 8px;
+      font-size: 1.15rem;
+      margin-bottom: 6px;
     }
 
-    .message {
+    .examples {
       display: flex;
-      flex-direction: column;
-      max-width: 75%;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 18px;
     }
 
-    .message.user {
-      align-self: flex-end;
-      align-items: flex-end;
+    .examples button {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-weight: 500;
+      font-size: 0.85rem;
+      padding: 8px 14px;
+      border-radius: 999px;
+      align-self: auto;
+      white-space: normal;
+      text-align: left;
     }
 
-    .message.ai {
-      align-self: flex-start;
-      align-items: flex-start;
-    }
+    .examples button:hover { border-color: var(--primary); opacity: 1; }
+
+    .message { display: flex; flex-direction: column; max-width: 75%; }
+    .message.user { align-self: flex-end; align-items: flex-end; }
+    .message.ai { align-self: flex-start; align-items: flex-start; }
+    .message.answer { align-self: stretch; max-width: 100%; }
 
     .bubble {
       padding: 10px 14px;
@@ -129,51 +141,139 @@
 
     .message.ai .bubble {
       background: var(--ai-bg);
-      color: var(--ai-text);
-      border: none;
       border-bottom-left-radius: 4px;
-      box-shadow: none;
     }
 
-    .message-label {
-      display: none;
-    }
-
-    .ai-message p { margin-bottom: 0.6em; }
-    .ai-message p:last-child { margin-bottom: 0; }
-    .ai-message ul, .ai-message ol { margin: 0.4em 0 0.6em 1.2em; }
-    .ai-message li { margin-bottom: 0.25em; }
-    .ai-message strong { color: #1e3a8a; }
-    .ai-message h3, .ai-message h4 { margin: 0.8em 0 0.3em; font-size: 0.95rem; }
-    .ai-message hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
-
-    .ai-message .table-wrap {
-      overflow-x: auto;
-      margin: 0.5em 0;
+    /* Answer card */
+    .card {
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 16px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
     }
 
-    .ai-message table {
-      width: 100%;
-      border-collapse: collapse;
+    .summary { font-size: 0.98rem; line-height: 1.55; }
+
+    .block-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+
+    .source { font-size: 0.75rem; color: var(--muted); }
+
+    /* Stat tiles */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      background: var(--surface-2);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+
+    .stat .label { font-size: 0.78rem; color: var(--muted); }
+    .stat .value {
+      font-size: 1.45rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat .value.missing { font-size: 0.95rem; font-weight: 500; color: var(--muted); }
+
+    /* Ranked bars: one series, value labels at the bar end */
+    .bars { display: flex; flex-direction: column; gap: 6px; }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(120px, 38%) 1fr auto;
+      align-items: center;
+      gap: 10px;
       font-size: 0.85rem;
+      padding: 2px 4px;
+      border-radius: 6px;
     }
 
-    .ai-message th, .ai-message td {
+    .bar-row:hover { background: var(--surface-2); }
+    .bar-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-track { height: 14px; background: var(--track); border-radius: 0 4px 4px 0; }
+    .bar-fill {
+      height: 100%;
+      min-width: 2px;
+      background: var(--series-1);
+      border-radius: 0 4px 4px 0;
+    }
+    .bar-row .num {
+      font-variant-numeric: tabular-nums;
+      min-width: 64px;
+      text-align: right;
+      color: var(--text);
+    }
+
+    /* Tables */
+    .table-wrap {
+      overflow: auto;
+      max-height: 440px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+
+    th, td {
       padding: 8px 12px;
       text-align: left;
       border-bottom: 1px solid var(--border);
-    }
-
-    .ai-message th {
-      background: #d1d5db;
-      font-weight: 600;
-      color: #1e293b;
+      vertical-align: top;
       white-space: nowrap;
     }
 
-    .ai-message tr:last-child td { border-bottom: none; }
+    /* Only the school name wraps; other columns stay on one line and the table scrolls. */
+    td:first-child { white-space: normal; min-width: 180px; }
+
+    th {
+      background: var(--surface-2);
+      font-weight: 600;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: var(--surface-2); }
+    td.missing { color: var(--muted); }
+
+    tr.reference td { background: var(--ref-bg); }
+
+    .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 1px 7px;
+      border-radius: 999px;
+      margin-left: 6px;
+      vertical-align: 1px;
+      white-space: nowrap;
+    }
+
+    .tag.ref { background: #ffe8bf; color: var(--ref-text); }
+    .tag.best { background: var(--best-bg); color: var(--best-text); }
+
+    .compare td.best { font-weight: 650; }
+    .compare th:first-child, .compare td:first-child { color: var(--muted); font-weight: 500; }
 
     .loading-bubble {
       display: flex;
@@ -182,7 +282,6 @@
       color: var(--muted);
       padding: 10px 14px;
       background: var(--ai-bg);
-      border: none;
       border-radius: var(--radius);
       border-bottom-left-radius: 4px;
       font-size: 0.875rem;
@@ -213,7 +312,7 @@
     footer {
       background: var(--surface);
       border-top: 1px solid var(--border);
-      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
       position: fixed;
       bottom: 0;
       left: 0;
@@ -222,13 +321,7 @@
       box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.1);
     }
 
-    .input-row {
-      display: flex;
-      gap: 10px;
-      max-width: 820px;
-      margin: 0 auto;
-      width: 100%;
-    }
+    .input-row { display: flex; gap: 10px; max-width: 880px; margin: 0 auto; width: 100%; }
 
     textarea {
       flex: 1;
@@ -242,7 +335,6 @@
       min-height: 48px;
       max-height: 120px;
       background: #fff;
-      transition: border-color 0.15s, box-shadow 0.15s;
     }
 
     textarea:focus {
@@ -261,7 +353,6 @@
       font-weight: 600;
       font-size: 0.925rem;
       cursor: pointer;
-      transition: opacity 0.15s;
       align-self: flex-end;
       white-space: nowrap;
     }
@@ -272,7 +363,9 @@
     @media (max-width: 600px) {
       .message { max-width: 92%; }
       header h1 { font-size: 1rem; }
-      button { padding: 12px 14px; }
+      .input-row > button { padding: 12px 14px; }
+      .card { padding: 14px; }
+      .bar-row { grid-template-columns: minmax(90px, 40%) 1fr auto; }
     }
   </style>
 </head>
@@ -281,27 +374,28 @@
     <div class="logo-icon" aria-hidden="true">🎓</div>
     <div>
       <h1>CollegeCopilot</h1>
-      <p>AI-powered college search for admissions counselors</p>
+      <p>Ask about U.S. colleges in plain English</p>
     </div>
   </header>
 
   <main id="chat" aria-live="polite">
     <div id="messages">
       <div class="empty-state" id="empty-state">
-        <strong>Ask anything about US colleges</strong>
-        Try: "Top 10 schools with lowest acceptance rate" or "Compare Harvard, Yale, and Princeton on cost and earnings"
+        <strong>Ask anything about U.S. colleges</strong>
+        Costs, admissions, graduation rates, earnings, majors, and schools like the ones you love.
+        <div class="examples">
+          <button type="button">Find 5 schools similar to UCLA but easier to get into</button>
+          <button type="button">Compare Harvard, Yale, and Princeton on cost and earnings</button>
+          <button type="button">My family makes $85,000. Which 5 schools in California cost us the least?</button>
+          <button type="button">Which 10 schools have the highest earnings after a computer science degree?</button>
+        </div>
       </div>
     </div>
   </main>
 
   <footer>
     <div class="input-row">
-      <textarea
-        id="question"
-        rows="1"
-        placeholder="Ask a question about colleges..."
-        aria-label="Your question"
-      ></textarea>
+      <textarea id="question" rows="1" placeholder="Ask a question about colleges..." aria-label="Your question"></textarea>
       <button id="send-btn" type="button">Send</button>
     </div>
   </footer>
@@ -315,128 +409,101 @@
     const sendBtn = document.getElementById("send-btn");
 
     function escapeHtml(text) {
-      return text
+      return String(text)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
     }
 
-    function inlineFormat(text) {
-      return escapeHtml(text)
-        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-        .replace(/\*(.+?)\*/g, "<em>$1</em>");
+    function renderStats(block) {
+      const tiles = block.items.map(item => {
+        const missing = item.display === "Not reported";
+        return `<div class="stat">
+          <div class="label">${escapeHtml(item.label)}</div>
+          <div class="value ${missing ? "missing" : ""}">${escapeHtml(item.display)}</div>
+        </div>`;
+      }).join("");
+      const title = block.title ? `<div class="block-title">${escapeHtml(block.title)}</div>` : "";
+      return `<section>${title}<div class="stats">${tiles}</div></section>`;
     }
 
-    function isTableRow(line) {
-      const t = line.trim();
-      return t.startsWith("|") && t.endsWith("|");
+    function renderBars(block) {
+      const rows = block.items.map(item => {
+        const pct = Math.max(0, (item.value / block.max) * 100);
+        const tip = `${item.label}: ${item.display}`;
+        return `<div class="bar-row" title="${escapeHtml(tip)}">
+          <span class="name">${escapeHtml(item.label)}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
+          <span class="num">${escapeHtml(item.display)}</span>
+        </div>`;
+      }).join("");
+      return `<section aria-label="${escapeHtml(block.title)} chart">
+        <div class="block-title">${escapeHtml(block.title)}</div>
+        <div class="bars">${rows}</div>
+      </section>`;
     }
 
-    function isTableSeparator(line) {
-      const t = line.trim();
-      return /^\|?[\s\-:|]+\|?$/.test(t) && t.includes("-");
+    function renderCompare(block) {
+      const head = `<tr><th></th>${block.schools.map(s => `<th>${escapeHtml(s)}</th>`).join("")}</tr>`;
+      const body = block.rows.map(row => `<tr>
+        <td>${escapeHtml(row.label)}</td>
+        ${row.cells.map(cell => {
+          const missing = cell.display === "Not reported";
+          const cls = [cell.best ? "best" : "", missing ? "missing" : ""].join(" ");
+          const tag = cell.best ? `<span class="tag best">Best</span>` : "";
+          return `<td class="${cls}">${escapeHtml(cell.display)}${tag}</td>`;
+        }).join("")}
+      </tr>`).join("");
+      return `<section>
+        <div class="table-wrap compare"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>
+      </section>`;
     }
 
-    function parseTableRow(line) {
-      return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
+    function renderTable(block) {
+      const head = `<tr>${block.columns.map(c =>
+        `<th class="${c.numeric ? "num" : ""}">${escapeHtml(c.label)}</th>`).join("")}</tr>`;
+      const body = block.rows.map(row => `<tr class="${row.reference ? "reference" : ""}">
+        ${row.cells.map((cell, i) => {
+          const col = block.columns[i];
+          const missing = cell === "Not reported";
+          const tag = row.reference && i === 0 ? `<span class="tag ref">Your school</span>` : "";
+          return `<td class="${col.numeric ? "num" : ""} ${missing ? "missing" : ""}">${escapeHtml(cell)}${tag}</td>`;
+        }).join("")}
+      </tr>`).join("");
+      return `<section><div class="table-wrap"><table><thead>${head}</thead><tbody>${body}</tbody></table></div></section>`;
     }
 
-    function renderTable(tableLines) {
-      const headerCells = parseTableRow(tableLines[0]);
-      let dataStart = tableLines[1] && isTableSeparator(tableLines[1]) ? 2 : 1;
-      const header = headerCells.map(c => `<th>${inlineFormat(c)}</th>`).join("");
-      const rows = tableLines.slice(dataStart)
-        .filter(isTableRow)
-        .map(line => `<tr>${parseTableRow(line).map(c => `<td>${inlineFormat(c)}</td>`).join("")}</tr>`)
-        .join("");
-      return `<div class="table-wrap"><table><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table></div>`;
-    }
+    const RENDERERS = { stats: renderStats, bars: renderBars, compare: renderCompare, table: renderTable };
 
-    function formatResponse(text) {
-      const lines = text.split("\n");
-      const parts = [];
-      let listType = null, listItems = [], i = 0;
-
-      function flushList() {
-        if (!listItems.length) return;
-        parts.push(`<${listType === "ol" ? "ol" : "ul"}>${listItems.join("")}</${listType === "ol" ? "ol" : "ul"}>`);
-        listItems = []; listType = null;
-      }
-
-      while (i < lines.length) {
-        const line = lines[i].trim();
-        if (!line) { flushList(); i++; continue; }
-
-        if (isTableRow(line)) {
-          flushList();
-          const tableLines = [];
-          while (i < lines.length && (isTableRow(lines[i].trim()) || isTableSeparator(lines[i].trim()))) {
-            tableLines.push(lines[i].trim()); i++;
-          }
-          parts.push(renderTable(tableLines));
-          continue;
-        }
-
-        if (/^-{3,}$/.test(line)) { flushList(); parts.push("<hr>"); i++; continue; }
-
-        const bullet = line.match(/^[-*•]\s+(.*)/);
-        const numbered = line.match(/^\d+\.\s+(.*)/);
-        const heading = line.match(/^#{1,3}\s+(.*)/);
-
-        if (bullet) {
-          if (listType !== "ul") { flushList(); listType = "ul"; }
-          listItems.push(`<li>${inlineFormat(bullet[1])}</li>`);
-        } else if (numbered) {
-          if (listType !== "ol") { flushList(); listType = "ol"; }
-          listItems.push(`<li>${inlineFormat(numbered[1])}</li>`);
-        } else {
-          flushList();
-          parts.push(heading
-            ? `<h3>${inlineFormat(heading[1])}</h3>`
-            : `<p>${inlineFormat(line)}</p>`);
-        }
-        i++;
-      }
-      flushList();
-      return parts.join("");
+    function renderAnswer(data) {
+      const blocks = (data.blocks || []).map(b => (RENDERERS[b.type] || (() => ""))(b)).join("");
+      const source = data.source ? `<div class="source">Source: ${escapeHtml(data.source)}</div>` : "";
+      return `<div class="card">
+        <p class="summary">${escapeHtml(data.response)}</p>
+        ${blocks}
+        ${source}
+      </div>`;
     }
 
     function scrollToBottom(smooth = true) {
-      chat.scrollTo({
-        top: chat.scrollHeight,
-        behavior: smooth ? "smooth" : "instant",
-      });
+      chat.scrollTo({ top: chat.scrollHeight, behavior: smooth ? "smooth" : "instant" });
     }
 
-    function clearInput() {
-      questionInput.value = "";
-      questionInput.style.height = "auto";
-    }
-
-    function appendMessage(role, content, isHtml = false) {
-      if (emptyState) emptyState.remove();
+    function addMessage(className, html) {
+      emptyState?.remove();
       const wrap = document.createElement("div");
-      wrap.className = `message ${role}`;
-      wrap.innerHTML = `<div class="bubble ${role === "ai" ? "ai-message" : ""}">${isHtml ? content : escapeHtml(content)}</div>`;
+      wrap.className = `message ${className}`;
+      wrap.innerHTML = html;
       messages.appendChild(wrap);
       requestAnimationFrame(() => scrollToBottom());
       return wrap;
     }
 
     function showLoading() {
-      if (emptyState) emptyState.remove();
-      const el = document.createElement("div");
-      el.className = "message ai";
+      const el = addMessage("ai", `<div class="loading-bubble">
+        <div class="spinner" aria-hidden="true"></div><span>Searching colleges...</span></div>`);
       el.id = "loading-msg";
-      el.innerHTML = `
-        <div class="loading-bubble">
-          <div class="spinner" aria-hidden="true"></div>
-          <span>Searching colleges...</span>
-        </div>
-      `;
-      messages.appendChild(el);
-      requestAnimationFrame(() => scrollToBottom());
     }
 
     function removeLoading() {
@@ -445,19 +512,16 @@
 
     function showError(message) {
       removeLoading();
-      const el = document.createElement("div");
-      el.className = "message ai";
-      el.innerHTML = `<div class="error-bubble">${escapeHtml(message)}</div>`;
-      messages.appendChild(el);
-      requestAnimationFrame(() => scrollToBottom());
+      addMessage("ai", `<div class="error-bubble">${escapeHtml(message)}</div>`);
     }
 
-    async function sendQuestion() {
-      const question = questionInput.value.trim();
+    async function sendQuestion(text) {
+      const question = (text ?? questionInput.value).trim();
       if (!question) { questionInput.focus(); return; }
 
-      appendMessage("user", question);
-      clearInput();
+      addMessage("user", `<div class="bubble">${escapeHtml(question)}</div>`);
+      questionInput.value = "";
+      questionInput.style.height = "auto";
       sendBtn.disabled = true;
       showLoading();
 
@@ -476,18 +540,23 @@
           return;
         }
 
-        appendMessage("ai", formatResponse(data.response), true);
+        if (data.kind === "result") {
+          addMessage("answer", renderAnswer(data));
+        } else {
+          addMessage("ai", `<div class="bubble">${escapeHtml(data.response)}</div>`);
+        }
       } catch {
-        removeLoading();
         showError("Could not reach the server. Make sure the backend is running.");
       } finally {
         sendBtn.disabled = false;
         questionInput.focus();
-        scrollToBottom();
       }
     }
 
-    sendBtn.addEventListener("click", sendQuestion);
+    sendBtn.addEventListener("click", () => sendQuestion());
+
+    document.querySelectorAll(".examples button").forEach(btn =>
+      btn.addEventListener("click", () => sendQuestion(btn.textContent)));
 
     questionInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -495,6 +564,9 @@
         sendQuestion();
       }
     });
+
+    const sharedQuestion = new URLSearchParams(location.search).get("q");
+    if (sharedQuestion) sendQuestion(sharedQuestion);
 
     questionInput.addEventListener("input", () => {
       questionInput.style.height = "auto";
