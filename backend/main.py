@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from database import execute_sql, get_latest_year
 from planner import plan_answer
+from presentation import build_blocks, unsupported_numbers
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,22 +41,23 @@ class AskRequest(BaseModel):
 
 class AskResponse(BaseModel):
     question: str
-    response: str
-    schools_considered: int
+    kind: str  # "result", "clarify", "cannot_answer" or "no_results"
+    response: str  # short text answer (summary, clarifying question, or "I don't know")
+    blocks: list[dict] = []
+    source: str | None = None
+    schools_considered: int = 0
 
 
-FORMAT_SYSTEM_PROMPT = """You are CollegeCopilot. You turn query results into a clear answer.
+SUMMARY_SYSTEM_PROMPT = """You are CollegeCopilot. Write a one- or two-sentence summary that
+answers the question from the data. Tables and charts showing the full data appear below it.
 
 RULES:
 - Use ONLY the data provided. Never add schools, numbers, or facts that are not in it.
-- List every row provided, in the order given. Do not drop or re-filter rows.
-- If a value is null, say "not reported" rather than guessing.
-- If the data does not fully answer the question, say what is missing.
-- Rates in the data are decimals: show 0.254 as 25.4%. Show money as $45,000.
-- Rows with role "reference" are the school the user asked about: show it first as the point of
-  comparison. For rows with role "similar", mention what they are similar on (similar_on).
-- Do not add advice, explanations, or opinions. At most one short sentence summarizing the data.
-- Use a numbered list for lists and a markdown table for comparisons. No intro or closing filler."""
+- Copy numbers exactly from the data. Rates are decimals: show 0.2546 as 25.5% (one decimal).
+  Show money as whole dollars ($45,000).
+- Rows with role "reference" are the school the user asked about.
+- If values the question needs are null, say they are not reported.
+- No advice, opinions, markdown, or lists."""
 
 NO_ANSWER_MESSAGE = (
     "I don't know. That question can't be answered from the data I have "
@@ -73,21 +75,32 @@ def _get_client() -> anthropic.Anthropic:
     return _client
 
 
-def format_response(question: str, data: list[dict], truncated: bool) -> str:
-    note = f"(Only the first {len(data)} rows are shown.)" if truncated else ""
+def fallback_summary(rows: list[dict]) -> str:
+    reference = next((r for r in rows if r.get("role") == "reference"), None)
+    if reference:
+        return f"{len(rows) - 1} schools similar to {reference.get('name')}."
+    if len(rows) == 1 and rows[0].get("name"):
+        return f"Here is the data for {rows[0]['name']}."
+    return f"Found {len(rows)} results."
+
+
+def write_summary(question: str, rows: list[dict], context: str) -> str:
+    """Claude's summary, or a plain fallback if it cites a number not in the data."""
     message = _get_client().messages.create(
         model=os.getenv("CLAUDE_MODEL", "claude-haiku-4-5"),
-        max_tokens=2000,
-        system=FORMAT_SYSTEM_PROMPT,
+        max_tokens=300,
+        system=SUMMARY_SYSTEM_PROMPT,
         messages=[{
             "role": "user",
-            "content": (
-                f'QUESTION: "{question}"\n\n'
-                f"DATA ({len(data)} rows) {note}:\n{json.dumps(data, default=str)}"
-            ),
+            "content": f'QUESTION: "{question}"\n\nDATA ({len(rows)} rows):\n{json.dumps(rows, default=str)}',
         }],
     )
-    return message.content[0].text
+    summary = message.content[0].text.strip()
+    bad = unsupported_numbers(summary, rows, f"{question} {context}")
+    if bad:
+        logger.warning("Summary dropped, numbers not in data: %s | %s", bad, summary)
+        return fallback_summary(rows)
+    return summary
 
 
 @app.get("/health")
@@ -102,7 +115,7 @@ def health():
     return {"status": "healthy", "schools_in_database": total}
 
 
-FORMAT_ROW_LIMIT = 100
+SUMMARY_ROW_LIMIT = 100
 
 
 @app.post("/ask", response_model=AskResponse)
@@ -117,20 +130,24 @@ def ask(request: AskRequest):
         answer = plan_answer(question)
         logger.info("Plan: kind=%s trace=%s", answer.kind, answer.trace)
         if answer.kind == "cannot_answer":
-            return AskResponse(question=question, response=NO_ANSWER_MESSAGE, schools_considered=0)
+            return AskResponse(question=question, kind="cannot_answer", response=NO_ANSWER_MESSAGE)
         if answer.kind == "clarify":
-            return AskResponse(question=question, response=answer.clarification, schools_considered=0)
+            return AskResponse(question=question, kind="clarify", response=answer.clarification)
 
-        data = answer.rows
-        logger.info("Results: %d from %s", len(data), answer.source)
-        if not data:
-            return AskResponse(question=question, response=NO_RESULTS_MESSAGE, schools_considered=0)
+        rows = answer.rows[:SUMMARY_ROW_LIMIT]
+        logger.info("Results: %d from %s", len(answer.rows), answer.source)
+        if not rows:
+            return AskResponse(question=question, kind="no_results", response=NO_RESULTS_MESSAGE)
 
-        response = format_response(
-            question, data[:FORMAT_ROW_LIMIT], truncated=len(data) > FORMAT_ROW_LIMIT
+        source = f"U.S. Department of Education College Scorecard, {get_latest_year()} data"
+        return AskResponse(
+            question=question,
+            kind="result",
+            response=write_summary(question, rows, source),
+            blocks=build_blocks(rows, answer.highlight),
+            source=source,
+            schools_considered=len(answer.rows),
         )
-        response += f"\n\n*Source: U.S. Department of Education College Scorecard, {get_latest_year()} data.*"
-        return AskResponse(question=question, response=response, schools_considered=len(data))
 
     except psycopg2.Error as e:
         logger.error("Database error: %s", e)

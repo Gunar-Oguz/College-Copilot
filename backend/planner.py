@@ -110,6 +110,10 @@ TOOLS = [
             "properties": {
                 "kind": {"type": "string", "enum": ["result", "clarify", "cannot_answer"]},
                 "result_id": {"type": "string"},
+                "highlight_column": {
+                    "type": "string",
+                    "description": "The result column that most directly answers the question (charted)",
+                },
                 "clarification": {"type": "string"},
             },
             "required": ["kind"],
@@ -124,6 +128,7 @@ class Answer:
     rows: list[dict] = field(default_factory=list)
     clarification: str = ""
     source: str = ""  # tool and input that produced the rows
+    highlight: str | None = None  # column that answers the question
     trace: list[str] = field(default_factory=list)
 
 
@@ -213,7 +218,10 @@ class _Session:
             return Answer("clarify", clarification=args["clarification"].strip(), trace=self.trace)
         if kind == "result" and args.get("result_id") in self.results:
             source, rows = self.results[args["result_id"]]
-            return Answer("result", rows=rows, source=source, trace=self.trace)
+            return Answer(
+                "result", rows=rows, source=source,
+                highlight=args.get("highlight_column"), trace=self.trace,
+            )
         return "Invalid submission: give a valid result_id, a clarification, or kind=cannot_answer."
 
 
