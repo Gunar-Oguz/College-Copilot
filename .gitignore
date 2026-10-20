@@ -10,6 +10,7 @@ logs/
 data/*
 !data/*.sql
 !data/school_aliases_curated.csv
+!data/zipcodes.csv
 
 # Environment
 .env
@@ -18,3 +19,6 @@ __pycache__/
 
 # Eval run outputs
 evals/results/
+
+# Personal Claude Code settings
+.claude/settings.local.json
