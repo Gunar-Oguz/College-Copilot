@@ -11,8 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from database import UnsafeQueryError, execute_sql, get_latest_year, run_readonly_query
-from sql_generator import CANNOT_ANSWER, CLARIFY_PREFIX, generate_sql
+from database import execute_sql, get_latest_year
+from planner import plan_answer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,6 +52,9 @@ RULES:
 - If a value is null, say "not reported" rather than guessing.
 - If the data does not fully answer the question, say what is missing.
 - Rates in the data are decimals: show 0.254 as 25.4%. Show money as $45,000.
+- Rows with role "reference" are the school the user asked about: show it first as the point of
+  comparison. For rows with role "similar", mention what they are similar on (similar_on).
+- Do not add advice, explanations, or opinions. At most one short sentence summarizing the data.
 - Use a numbered list for lists and a markdown table for comparisons. No intro or closing filler."""
 
 NO_ANSWER_MESSAGE = (
@@ -111,27 +114,24 @@ def ask(request: AskRequest):
     logger.info("Question: %s", question)
 
     try:
-        sql = generate_sql(question)
-        logger.info("SQL: %s", sql)
-        if sql == CANNOT_ANSWER:
+        answer = plan_answer(question)
+        logger.info("Plan: kind=%s trace=%s", answer.kind, answer.trace)
+        if answer.kind == "cannot_answer":
             return AskResponse(question=question, response=NO_ANSWER_MESSAGE, schools_considered=0)
-        if sql.startswith(CLARIFY_PREFIX):
-            clarification = sql.removeprefix(CLARIFY_PREFIX).strip()
-            return AskResponse(question=question, response=clarification, schools_considered=0)
+        if answer.kind == "clarify":
+            return AskResponse(question=question, response=answer.clarification, schools_considered=0)
 
-        data = run_readonly_query(sql)
-        logger.info("Results: %d", len(data))
+        data = answer.rows
+        logger.info("Results: %d from %s", len(data), answer.source)
         if not data:
             return AskResponse(question=question, response=NO_RESULTS_MESSAGE, schools_considered=0)
 
         response = format_response(
             question, data[:FORMAT_ROW_LIMIT], truncated=len(data) > FORMAT_ROW_LIMIT
         )
+        response += f"\n\n*Source: U.S. Department of Education College Scorecard, {get_latest_year()} data.*"
         return AskResponse(question=question, response=response, schools_considered=len(data))
 
-    except UnsafeQueryError as e:
-        logger.warning("Rejected SQL: %s", e)
-        return AskResponse(question=question, response=NO_ANSWER_MESSAGE, schools_considered=0)
     except psycopg2.Error as e:
         logger.error("Database error: %s", e)
         raise HTTPException(status_code=500, detail="Database error while answering the question")

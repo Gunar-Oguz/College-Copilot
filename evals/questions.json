@@ -97,6 +97,15 @@
   {"id": "disambiguated-u-miami", "category": "ambiguous", "question": "What is the average net price at the University of Miami in Florida?", "check": "value",
    "truth_sql": "SELECT cost_avg_net_price AS value FROM schools WHERE id = 135726 AND year = '2024-25'"},
 
+  {"id": "similar-ucla-easier", "category": "similar", "question": "Find 5 schools similar to UCLA but easier to get into", "check": "similar",
+   "target": 110662, "n": 5, "admission": "easier"},
+  {"id": "similar-mit-cheaper", "category": "similar", "question": "What are 5 schools like MIT that cost less?", "check": "similar",
+   "target": 166683, "n": 5, "cheaper": true},
+  {"id": "similar-uw-west-easier", "category": "similar", "question": "Show me 5 colleges like the University of Washington in Seattle, in Oregon or California, that are less selective", "check": "similar",
+   "target": 236948, "n": 5, "admission": "easier", "states": ["OR", "CA"]},
+  {"id": "similar-michigan", "category": "similar", "question": "Which 10 schools are most like the University of Michigan?", "check": "similar",
+   "target": 170976, "n": 10},
+
   {"id": "unanswerable-usnews", "category": "unanswerable", "question": "What is Harvard's US News ranking?", "check": "cannot_answer"},
   {"id": "unanswerable-deadlines", "category": "unanswerable", "question": "When is the early decision deadline for Yale?", "check": "cannot_answer"},
   {"id": "unanswerable-dorms", "category": "unanswerable", "question": "Which colleges have the best dorms?", "check": "cannot_answer"},

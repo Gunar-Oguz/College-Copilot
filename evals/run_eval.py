@@ -1,5 +1,5 @@
 """
-Score the question -> SQL -> rows pipeline against known-correct answers.
+Score the question -> planner -> rows pipeline against known-correct answers.
 
 Each case in questions.json has a truth_sql that computes the correct answer
 and a check type:
@@ -8,6 +8,7 @@ and a check type:
   ids_set       generated ids are exactly the truth ids
   cannot_answer generator returns CANNOT_ANSWER
   clarify       generator asks which school was meant
+  similar       n schools similar to `target`, all meeting the case's constraints
 
 Usage (from the repo root, needs ANTHROPIC_API_KEY and Postgres):
     python evals/run_eval.py                 # run all cases
@@ -32,8 +33,8 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(ROOT_DIR / ".env")
 load_dotenv(ROOT_DIR / "backend" / ".env")
 
-from database import execute_sql, run_readonly_query  # noqa: E402
-from sql_generator import CANNOT_ANSWER, CLARIFY_PREFIX, generate_sql  # noqa: E402
+from database import MAX_ROWS, execute_sql  # noqa: E402
+from planner import plan_answer  # noqa: E402
 
 EVAL_DIR = Path(__file__).resolve().parent
 RESULTS_DIR = EVAL_DIR / "results"
@@ -71,6 +72,9 @@ def check_value(case, truth_rows, rows):
     truth = truth_rows[0]["value"]
     if not rows:
         return False, "no rows returned"
+    # Listing exactly the matching schools also answers "how many" questions.
+    if case["category"] == "count" and len(rows) == truth and len(rows) < MAX_ROWS:
+        return True, ""
     candidates = {k: v for k, v in rows[0].items() if k not in ID_KEYS and k != "year"}
     if any(_matches(truth, v) for v in candidates.values()):
         return True, ""
@@ -106,11 +110,40 @@ def check_ids_set(case, truth_rows, rows):
     return False, f"missing {sorted(expected - got)}, unexpected {sorted(got - expected)}"
 
 
-CHECKS = {"value": check_value, "top_n": check_top_n, "ids_set": check_ids_set}
+def check_similar(case, truth_rows, rows):
+    reference = [r for r in rows if r.get("role") == "reference"]
+    similar = [r for r in rows if r.get("role") == "similar"]
+    if len(reference) != 1 or reference[0]["id"] != case["target"]:
+        return False, "reference school missing or wrong (similarity tool not used?)"
+    target = reference[0]
+    if len(similar) != case["n"]:
+        return False, f"expected {case['n']} similar schools, got {len(similar)}"
+    if any(r["id"] == case["target"] for r in similar):
+        return False, "reference school listed as similar"
+    if case.get("admission") == "easier" and not all(
+        r["admission_rate"] is not None and r["admission_rate"] > target["admission_rate"] for r in similar
+    ):
+        return False, "a school is not easier to get into"
+    if case.get("cheaper") and not all(
+        r["cost_avg_net_price"] is not None and r["cost_avg_net_price"] < target["cost_avg_net_price"]
+        for r in similar
+    ):
+        return False, "a school is not cheaper"
+    if case.get("states") and not all(r["state"] in case["states"] for r in similar):
+        return False, "a school is outside the requested states"
+    return True, ""
+
+
+CHECKS = {
+    "value": check_value,
+    "top_n": check_top_n,
+    "ids_set": check_ids_set,
+    "similar": check_similar,
+}
 
 
 def load_truth(case) -> list[dict]:
-    if case["check"] in ("cannot_answer", "clarify"):
+    if case["check"] in ("cannot_answer", "clarify", "similar"):
         return []
     rows = execute_sql(case["truth_sql"])
     if not rows:
@@ -127,22 +160,21 @@ def run_case(case) -> dict:
     start = time.perf_counter()
     try:
         truth_rows = load_truth(case)
-        sql = generate_sql(case["question"])
-        result["sql"] = sql
+        answer = plan_answer(case["question"])
+        result["trace"] = answer.trace
         if case["check"] == "cannot_answer":
-            passed = sql == CANNOT_ANSWER
+            passed = answer.kind == "cannot_answer"
             reason = "" if passed else "answered instead of saying it can't"
         elif case["check"] == "clarify":
-            passed = sql.startswith(CLARIFY_PREFIX)
+            passed = answer.kind == "clarify"
             reason = "" if passed else "guessed instead of asking which school"
-        elif sql.startswith(CLARIFY_PREFIX):
-            passed, reason = False, f"asked unnecessarily: {sql}"
-        elif sql == CANNOT_ANSWER:
+        elif answer.kind == "clarify":
+            passed, reason = False, f"asked unnecessarily: {answer.clarification}"
+        elif answer.kind == "cannot_answer":
             passed, reason = False, "said it can't answer"
         else:
-            rows = run_readonly_query(sql)
-            result["row_count"] = len(rows)
-            passed, reason = CHECKS[case["check"]](case, truth_rows, rows)
+            result["row_count"] = len(answer.rows)
+            passed, reason = CHECKS[case["check"]](case, truth_rows, answer.rows)
     except Exception as exc:  # report every failure as a result, keep going
         passed, reason = False, f"{type(exc).__name__}: {exc}".strip()
     result.update(passed=passed, reason=reason, seconds=round(time.perf_counter() - start, 2))

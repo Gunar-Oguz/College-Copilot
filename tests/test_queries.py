@@ -8,6 +8,7 @@ Database tests are skipped when Postgres is not reachable. Answer quality is
 measured separately by evals/run_eval.py, which calls Claude.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -19,7 +20,6 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from database import (  # noqa: E402
     UnsafeQueryError,
-    check_query,
     get_db_connection,
     get_latest_year,
     get_schema,
@@ -27,7 +27,8 @@ from database import (  # noqa: E402
     validate_select,
 )
 from school_lookup import normalize, resolve_school  # noqa: E402
-from sql_generator import CANNOT_ANSWER, CLARIFY_PREFIX, _strip_markdown, _submit, build_prompt  # noqa: E402
+from planner import _Session, build_prompt, net_price_column  # noqa: E402
+from similar_schools import find_similar_schools  # noqa: E402
 
 
 def _db_available() -> bool:
@@ -75,28 +76,38 @@ class TestValidateSelect:
             validate_select(sql)
 
 
-class TestSqlGeneratorHelpers:
-    def test_strips_markdown_fences(self):
-        assert _strip_markdown("```sql\nSELECT 1\n```") == "SELECT 1"
-
-    def test_leaves_plain_sql_alone(self):
-        assert _strip_markdown("  SELECT 1  ") == "SELECT 1"
-
+class TestPlannerHelpers:
     def test_prompt_pins_latest_year_and_requires_submit(self):
         prompt = build_prompt("Top 5 schools", "Table: schools", "2024-25")
         assert "schools.year = '2024-25'" in prompt
         assert "submit_answer" in prompt
 
+    @pytest.mark.parametrize(
+        "income,column",
+        [
+            (25_000, "cost_net_price_income_0_30k"),
+            (30_000, "cost_net_price_income_0_30k"),
+            (30_001, "cost_net_price_income_30_48k"),
+            (48_000, "cost_net_price_income_30_48k"),
+            (60_000, "cost_net_price_income_48_75k"),
+            (75_000, "cost_net_price_income_48_75k"),
+            (85_000, "cost_net_price_income_75_110k"),
+            (110_000, "cost_net_price_income_75_110k"),
+            (150_000, "cost_net_price_income_110k_plus"),
+        ],
+    )
+    def test_net_price_column(self, income, column):
+        assert net_price_column(income)["column"] == column
+
     def test_submit_cannot_answer(self):
-        assert _submit({"kind": "cannot_answer"}) == (CANNOT_ANSWER, "ok")
+        assert _Session().submit({"kind": "cannot_answer"}).kind == "cannot_answer"
 
     def test_submit_clarify(self):
-        answer, _ = _submit({"kind": "clarify", "clarification": "Which UW?"})
-        assert answer == f"{CLARIFY_PREFIX} Which UW?"
+        answer = _Session().submit({"kind": "clarify", "clarification": "Which UW?"})
+        assert answer.kind == "clarify" and answer.clarification == "Which UW?"
 
-    def test_submit_incomplete_keeps_going(self):
-        answer, text = _submit({"kind": "sql"})
-        assert answer is None and "Invalid" in text
+    def test_submit_unknown_result_id_is_rejected(self):
+        assert isinstance(_Session().submit({"kind": "result", "result_id": "r9"}), str)
 
     def test_normalize(self):
         assert normalize("  Texas A&M University-College Station ") == "texas a and m university college station"
@@ -137,19 +148,46 @@ class TestSchemaHelpers:
 
 
 @requires_db
-class TestCheckQuery:
-    def test_valid_query(self):
-        assert check_query("SELECT id FROM schools WHERE year = '2024-25'") is None
+class TestPlannerSession:
+    def test_run_query_result_can_be_submitted(self):
+        session = _Session()
+        reply = json.loads(session.call("run_query", {"sql": "SELECT id, name FROM schools LIMIT 2"}))
+        answer = session.submit({"kind": "result", "result_id": reply["result_id"]})
+        assert answer.kind == "result" and len(answer.rows) == 2
 
-    def test_reports_planning_error(self):
-        assert "school" in check_query("SELECT id FROM schools WHERE school.year = '2024-25'")
+    def test_run_query_errors_go_back_to_claude(self):
+        reply = json.loads(_Session().call("run_query", {"sql": "SELECT nope FROM schools"}))
+        assert "nope" in reply["error"]
 
-    def test_reports_unsafe_query(self):
-        assert check_query("DELETE FROM schools") == "Only SELECT queries are allowed"
+    def test_unsafe_sql_errors_go_back_to_claude(self):
+        reply = json.loads(_Session().call("run_query", {"sql": "DELETE FROM schools"}))
+        assert reply["error"] == "Only SELECT queries are allowed"
 
-    def test_submit_retries_broken_sql(self):
-        answer, text = _submit({"kind": "sql", "sql": "SELECT nope FROM schools"})
-        assert answer is None and "fix it" in text
+
+@requires_db
+class TestSimilarSchools:
+    UCLA = 110662
+
+    def test_reference_first_then_matches(self):
+        rows = find_similar_schools(self.UCLA, limit=5)
+        assert rows[0]["id"] == self.UCLA and rows[0]["role"] == "reference"
+        assert [r["role"] for r in rows[1:]] == ["similar"] * 5
+        scores = [r["similarity"] for r in rows[1:]]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_easier_to_get_into(self):
+        rows = find_similar_schools(self.UCLA, limit=10, admission="easier")
+        target_rate = rows[0]["admission_rate"]
+        assert all(r["admission_rate"] > target_rate for r in rows[1:])
+
+    def test_cheaper_and_state_filter(self):
+        rows = find_similar_schools(166683, limit=5, cheaper=True, states=["ca"])
+        assert all(r["state"] == "CA" for r in rows[1:])
+        assert all(r["cost_avg_net_price"] < rows[0]["cost_avg_net_price"] for r in rows[1:])
+
+    def test_unknown_school(self):
+        with pytest.raises(ValueError):
+            find_similar_schools(-1)
 
 
 def _alias_table_loaded() -> bool:

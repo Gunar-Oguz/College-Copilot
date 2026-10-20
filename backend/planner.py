@@ -1,0 +1,246 @@
+"""Turn a question into data using Claude as a planner over deterministic tools.
+
+Claude never states facts itself here. It calls tools that read the database,
+then submits the id of the tool result that answers the question (or asks for
+clarification, or says it cannot answer).
+"""
+
+import json
+import os
+from dataclasses import dataclass, field
+
+import anthropic
+import psycopg2
+
+from database import UnsafeQueryError, get_latest_year, get_schema, run_readonly_query
+from school_lookup import resolve_school
+from similar_schools import find_similar_schools
+
+MAX_TOOL_ROUNDS = 8
+PREVIEW_ROWS = 20
+
+INCOME_BRACKETS = [
+    (30_000, "cost_net_price_income_0_30k", "$0-$30,000"),
+    (48_000, "cost_net_price_income_30_48k", "$30,001-$48,000"),
+    (75_000, "cost_net_price_income_48_75k", "$48,001-$75,000"),
+    (110_000, "cost_net_price_income_75_110k", "$75,001-$110,000"),
+    (float("inf"), "cost_net_price_income_110k_plus", "$110,001 and up"),
+]
+
+COLUMN_NOTES = """
+- schools has one row per (id, year). id is the IPEDS UNITID. Names are NOT unique.
+- Rates (admission_rate, completion_rate, retention_rate, pell_grant_rate, etc.) are decimals 0-1, e.g. 0.25 = 25%.
+- ownership: 1 = public, 2 = private nonprofit, 3 = private for-profit.
+- cost_avg_net_price is average annual net price. cost_net_price_income_* are net price by family
+  income bracket; always get the right column from net_price_column.
+- earnings_median_10yr is median earnings 10 years after entry, in dollars.
+- state is a 2-letter code. Many columns are NULL for schools that did not report them.
+- programs joins to schools on (programs.school_id = schools.id AND programs.year = schools.year).
+  credential_level: 1 = undergraduate certificate, 2 = associate, 3 = bachelor's, 4 = post-bacc certificate,
+  5 = master's, 6 = doctoral, 7 = first professional, 8 = graduate certificate.
+  cip_code is the 4-digit CIP family as text 'NN.NN', e.g. '11.07' = Computer Science,
+  '51.38' = Registered Nursing, '52.02' = Business Administration. There are no 6-digit codes.
+""".strip()
+
+TOOLS = [
+    {
+        "name": "resolve_school",
+        "description": (
+            "Look up a school by name or nickname (e.g. 'UCLA', 'Penn', 'UW'). Returns candidates "
+            "with id, name, city, state, student_size and a match score (1.0 = exact name or alias)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "net_price_column",
+        "description": "Return the schools column holding net price for a given annual family income.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"family_income": {"type": "number", "description": "Annual income in dollars"}},
+            "required": ["family_income"],
+        },
+    },
+    {
+        "name": "find_similar_schools",
+        "description": (
+            "Find schools most similar to a school (selectivity, size, cost, outcomes, public/private, "
+            "type). Returns the reference school first, then matches with a similarity score and the "
+            "stats they are similar on. Use for 'schools like X' questions."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "school_id": {"type": "integer"},
+                "limit": {"type": "integer", "description": "Number of matches, default 10, max 25"},
+                "admission": {
+                    "type": "string", "enum": ["any", "easier", "harder"],
+                    "description": "easier = higher acceptance rate than the reference school",
+                },
+                "cheaper": {"type": "boolean", "description": "Only schools with a lower average net price"},
+                "states": {"type": "array", "items": {"type": "string"}, "description": "2-letter codes"},
+                "ownership": {"type": "integer", "description": "1 public, 2 private nonprofit, 3 for-profit"},
+            },
+            "required": ["school_id"],
+        },
+    },
+    {
+        "name": "run_query",
+        "description": (
+            "Run one read-only PostgreSQL SELECT and get a result id, the row count and a preview. "
+            "Errors are returned so you can fix the query and try again."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"sql": {"type": "string"}},
+            "required": ["sql"],
+        },
+    },
+    {
+        "name": "submit_answer",
+        "description": (
+            "Finish. kind=result with the result_id that answers the question; kind=clarify with a "
+            "question for the user; or kind=cannot_answer."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["result", "clarify", "cannot_answer"]},
+                "result_id": {"type": "string"},
+                "clarification": {"type": "string"},
+            },
+            "required": ["kind"],
+        },
+    },
+]
+
+
+@dataclass
+class Answer:
+    kind: str  # "result", "clarify" or "cannot_answer"
+    rows: list[dict] = field(default_factory=list)
+    clarification: str = ""
+    source: str = ""  # tool and input that produced the rows
+    trace: list[str] = field(default_factory=list)
+
+
+_client = None
+
+
+def _get_client() -> anthropic.Anthropic:
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    return _client
+
+
+def net_price_column(family_income: float) -> dict:
+    for upper, column, label in INCOME_BRACKETS:
+        if family_income <= upper:
+            return {"column": column, "bracket": label}
+    raise AssertionError("unreachable")
+
+
+def build_prompt(question: str, schema: str, latest_year: str) -> str:
+    return f"""Find the data that answers a question about U.S. colleges.
+
+SCHEMA:
+{schema}
+
+COLUMN NOTES:
+{COLUMN_NOTES}
+
+RULES:
+- For every specific school named in the question, call resolve_school and use the returned ids.
+  Never match school names with ILIKE or LIKE.
+- Use a candidate when it is the only one with the top score, or when the question makes clear
+  which one is meant (e.g. by state). If several candidates fit equally, submit clarify with a
+  short question listing them with city and state.
+- For any family income, call net_price_column to get the cost column.
+- For "schools like X" questions, use find_similar_schools.
+- In run_query: filter schools.year = '{latest_year}' unless the question asks about other years;
+  select schools.id and schools.name plus every column used to filter or sort; exclude NULLs in
+  filtered or sorted columns; add LIMIT 50 unless a number or count is asked for.
+- If a named school can't be found or the data can't answer the question, submit cannot_answer.
+
+QUESTION: "{question}"
+
+Finish by calling submit_answer."""
+
+
+class _Session:
+    """Runs tool calls for one question and keeps their results by id."""
+
+    def __init__(self):
+        self.results: dict[str, tuple[str, list[dict]]] = {}
+        self.trace: list[str] = []
+
+    def _store(self, source: str, rows: list[dict]) -> str:
+        result_id = f"r{len(self.results) + 1}"
+        self.results[result_id] = (source, rows)
+        return json.dumps(
+            {"result_id": result_id, "row_count": len(rows), "preview": rows[:PREVIEW_ROWS]},
+            default=str,
+        )
+
+    def call(self, name: str, args: dict) -> str:
+        self.trace.append(f"{name}({json.dumps(args, default=str)})")
+        try:
+            if name == "resolve_school":
+                return json.dumps(resolve_school(args.get("name", "")), default=str)
+            if name == "net_price_column":
+                return json.dumps(net_price_column(float(args["family_income"])))
+            if name == "find_similar_schools":
+                rows = find_similar_schools(**args)
+                return self._store(f"find_similar_schools({json.dumps(args)})", rows)
+            if name == "run_query":
+                rows = run_readonly_query(args["sql"])
+                return self._store(args["sql"], rows)
+        except (UnsafeQueryError, psycopg2.Error, ValueError, TypeError, KeyError) as exc:
+            message = getattr(exc, "pgerror", None) or str(exc)
+            return json.dumps({"error": message.strip()})
+        return json.dumps({"error": f"unknown tool {name}"})
+
+    def submit(self, args: dict) -> Answer | str:
+        """Return an Answer, or an error message to send back to Claude."""
+        kind = args.get("kind")
+        if kind == "cannot_answer":
+            return Answer("cannot_answer", trace=self.trace)
+        if kind == "clarify" and args.get("clarification"):
+            return Answer("clarify", clarification=args["clarification"].strip(), trace=self.trace)
+        if kind == "result" and args.get("result_id") in self.results:
+            source, rows = self.results[args["result_id"]]
+            return Answer("result", rows=rows, source=source, trace=self.trace)
+        return "Invalid submission: give a valid result_id, a clarification, or kind=cannot_answer."
+
+
+def plan_answer(question: str) -> Answer:
+    session = _Session()
+    messages = [{"role": "user", "content": build_prompt(question, get_schema(), get_latest_year())}]
+    for _ in range(MAX_TOOL_ROUNDS):
+        message = _get_client().messages.create(
+            model=os.getenv("CLAUDE_MODEL", "claude-haiku-4-5"),
+            max_tokens=1500,
+            tools=TOOLS,
+            tool_choice={"type": "any"},
+            messages=messages,
+        )
+        results = []
+        for block in message.content:
+            if block.type != "tool_use":
+                continue
+            if block.name == "submit_answer":
+                outcome = session.submit(block.input)
+                if isinstance(outcome, Answer):
+                    return outcome
+                text = outcome
+            else:
+                text = session.call(block.name, block.input)
+            results.append({"type": "tool_result", "tool_use_id": block.id, "content": text})
+
+        messages.append({"role": "assistant", "content": message.content})
+        messages.append({"role": "user", "content": results})
+    return Answer("cannot_answer", trace=session.trace)
