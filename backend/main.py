@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import time
 from pathlib import Path
 
 import anthropic
@@ -12,13 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from database import count_schools, run_query_pipeline
-from data_coverage import fetch_coverage_stats, format_coverage_header
-from response_formatter import (
-    format_direct_response,
-    format_list_response,
-    slim_schools_for_claude,
-)
+from database import UnsafeQueryError, execute_sql, get_latest_year, run_readonly_query
+from sql_generator import CANNOT_ANSWER, generate_sql
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,9 +23,6 @@ FRONTEND_DIR = ROOT_DIR / "frontend"
 
 load_dotenv(BASE_DIR / ".env")
 load_dotenv(ROOT_DIR / ".env")
-
-# Haiku is ~3-5x faster than Sonnet for simple formatting; override via env if needed.
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5")
 
 app = FastAPI(title="CollegeCopilot")
 
@@ -53,64 +44,45 @@ class AskResponse(BaseModel):
     schools_considered: int
 
 
-SYSTEM_PROMPT = """You are CollegeCopilot, a formatting assistant for college data.
+FORMAT_SYSTEM_PROMPT = """You are CollegeCopilot. You turn query results into a clear answer.
 
-CRITICAL: You are NOT a database. All filtering has already been done in SQL.
-The school data you receive is the complete, final result set.
+RULES:
+- Use ONLY the data provided. Never add schools, numbers, or facts that are not in it.
+- List every row provided, in the order given. Do not drop or re-filter rows.
+- If a value is null, say "not reported" rather than guessing.
+- If the data does not fully answer the question, say what is missing.
+- Rates in the data are decimals: show 0.254 as 25.4%. Show money as $45,000.
+- Use a numbered list for lists and a markdown table for comparisons. No intro or closing filler."""
 
-YOUR ONLY JOB:
-1. Format the provided schools into a clear, readable answer
-2. Include helpful context ONLY when the user explicitly asks for it
-3. Use ONLY the data provided — never invent schools or statistics
+NO_ANSWER_MESSAGE = (
+    "I don't know. That question can't be answered from the data I have "
+    "(U.S. Department of Education College Scorecard)."
+)
+NO_RESULTS_MESSAGE = "No schools in the data match that question."
 
-STRICT RULES — NEVER BREAK THESE:
-- If exactly N schools are provided, your response MUST list exactly N schools
-- NEVER exclude, skip, or re-filter any school from the provided data
-- NEVER add schools that are not in the provided data
-- NEVER apply acceptance rate, earnings, graduation, or any other filters yourself
-
-FORMATTING:
-- Percentages as "64.4%", money as "$45,000"
-- Lists: clean numbered format; comparisons: markdown table
-- No intro or closing phrases — just the direct formatted answer"""
+_client = None
 
 
-def format_meta_answer(stats: dict) -> str:
-    return (
-        f"{stats['total_schools']:,} schools across "
-        f"{stats['unique_states']} states/territories"
-    )
+def _get_client() -> anthropic.Anthropic:
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    return _client
 
 
-def ask_claude(question: str, schools: list[dict], plan, sql_row_count: int) -> str:
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    slim = slim_schools_for_claude(schools)
-    schools_data = json.dumps(slim, default=str)
-
-    logger.info(
-        "Claude format-only: model=%s sql_rows=%d schools_sent=%d query_type=%s",
-        CLAUDE_MODEL,
-        sql_row_count,
-        len(slim),
-        plan.kind,
-    )
-
-    message = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    f'Question: "{question}"\n\n'
-                    f"Total matching schools: {len(schools)}\n"
-                    f"FORMAT ONLY. List all {len(schools)} schools. "
-                    f"Do not add or remove any.\n\n"
-                    f"School data:\n{schools_data}"
-                ),
-            }
-        ],
+def format_response(question: str, data: list[dict], truncated: bool) -> str:
+    note = f"(Only the first {len(data)} rows are shown.)" if truncated else ""
+    message = _get_client().messages.create(
+        model=os.getenv("CLAUDE_MODEL", "claude-haiku-4-5"),
+        max_tokens=2000,
+        system=FORMAT_SYSTEM_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": (
+                f'QUESTION: "{question}"\n\n'
+                f"DATA ({len(data)} rows) {note}:\n{json.dumps(data, default=str)}"
+            ),
+        }],
     )
     return message.content[0].text
 
@@ -118,94 +90,51 @@ def ask_claude(question: str, schools: list[dict], plan, sql_row_count: int) -> 
 @app.get("/health")
 def health():
     try:
-        total = count_schools()
-    except psycopg2.Error:
+        result = execute_sql(
+            "SELECT COUNT(*) AS total FROM schools WHERE year = %s", (get_latest_year(),)
+        )
+        total = result[0]["total"] if result else 0
+    except Exception:
         total = 0
     return {"status": "healthy", "schools_in_database": total}
 
 
+FORMAT_ROW_LIMIT = 100
+
+
 @app.post("/ask", response_model=AskResponse)
 def ask(request: AskRequest):
-    t0 = time.perf_counter()
     question = request.question.strip()
     if not question:
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
-    try:
-        schools, plan, parsed = run_query_pipeline(question)
-    except psycopg2.Error as exc:
-        raise HTTPException(status_code=500, detail=f"Database error: {exc}") from exc
-
-    t_sql = time.perf_counter()
-
-    if not schools and plan.kind != "list":
-        raise HTTPException(status_code=500, detail="No schools found in database")
-
-    if plan.kind == "meta":
-        return AskResponse(
-            question=question,
-            response=format_meta_answer(schools[0]),
-            schools_considered=schools[0]["total_schools"],
-        )
-
-    sql_row_count = len(schools)
-    coverage = fetch_coverage_stats(parsed) if plan.kind == "list" else []
-    coverage_header = format_coverage_header(sql_row_count, coverage)
-
-    logger.info(
-        "Pipeline: parse+sql=%dms rows=%d kind=%s coverage=%s",
-        int((t_sql - t0) * 1000),
-        sql_row_count,
-        plan.kind,
-        coverage,
-    )
-
-    if sql_row_count == 0 and plan.kind == "list":
-        return AskResponse(
-            question=question,
-            response=coverage_header.rstrip(),
-            schools_considered=0,
-        )
-
-    # List/direct queries: format in Python (~instant). SQL already did all filtering.
-    if plan.kind == "list":
-        response = format_list_response(question, schools, parsed, coverage_header)
-        logger.info("Response: local format in %dms total", int((time.perf_counter() - t0) * 1000))
-        return AskResponse(
-            question=question,
-            response=response,
-            schools_considered=sql_row_count,
-        )
-
-    if plan.kind == "direct":
-        response = format_direct_response(schools, question)
-        logger.info("Response: local format in %dms total", int((time.perf_counter() - t0) * 1000))
-        return AskResponse(
-            question=question,
-            response=response,
-            schools_considered=sql_row_count,
-        )
-
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
+    logger.info("Question: %s", question)
 
     try:
-        response = ask_claude(question, schools, plan, sql_row_count)
-    except anthropic.APIError as exc:
-        raise HTTPException(status_code=502, detail=f"Claude API error: {exc}") from exc
+        sql = generate_sql(question)
+        logger.info("SQL: %s", sql)
+        if sql == CANNOT_ANSWER:
+            return AskResponse(question=question, response=NO_ANSWER_MESSAGE, schools_considered=0)
 
-    logger.info(
-        "Response: claude in %dms (sql %dms) total %dms",
-        int((time.perf_counter() - t_sql) * 1000),
-        int((t_sql - t0) * 1000),
-        int((time.perf_counter() - t0) * 1000),
-    )
+        data = run_readonly_query(sql)
+        logger.info("Results: %d", len(data))
+        if not data:
+            return AskResponse(question=question, response=NO_RESULTS_MESSAGE, schools_considered=0)
 
-    return AskResponse(
-        question=question,
-        response=response,
-        schools_considered=sql_row_count,
-    )
+        response = format_response(
+            question, data[:FORMAT_ROW_LIMIT], truncated=len(data) > FORMAT_ROW_LIMIT
+        )
+        return AskResponse(question=question, response=response, schools_considered=len(data))
+
+    except UnsafeQueryError as e:
+        logger.warning("Rejected SQL: %s", e)
+        return AskResponse(question=question, response=NO_ANSWER_MESSAGE, schools_considered=0)
+    except psycopg2.Error as e:
+        logger.error("Database error: %s", e)
+        raise HTTPException(status_code=500, detail="Database error while answering the question")
+    except anthropic.APIError as e:
+        logger.error("Claude API error: %s", e)
+        raise HTTPException(status_code=502, detail="AI service error, please try again")
 
 
 @app.get("/")
@@ -213,10 +142,4 @@ def home():
     index_path = FRONTEND_DIR / "index.html"
     if not index_path.exists():
         raise HTTPException(status_code=404, detail="Frontend not found")
-    return FileResponse(
-        index_path,
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-        },
-    )
+    return FileResponse(index_path)

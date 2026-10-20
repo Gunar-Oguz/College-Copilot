@@ -1,340 +1,120 @@
 """
-CollegeCopilot query engine tests.
+Tests for the SQL safety layer and SQL generator helpers.
 
-Run from backend/:
-    python -m pytest ../tests/test_queries.py -v
+Run from the repo root:
+    python -m pytest tests/test_queries.py -v
+
+Database tests are skipped when Postgres is not reachable. Answer quality is
+measured separately by evals/run_eval.py, which calls Claude.
 """
 
 import sys
-from decimal import Decimal
 from pathlib import Path
 
+import psycopg2
 import pytest
 
 BACKEND_DIR = Path(__file__).resolve().parents[1] / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
-from database import execute_plan, fetch_meta_stats, run_query_pipeline  # noqa: E402
-from query_engine import build_query_plan  # noqa: E402
-from data_coverage import format_coverage_header, sparse_filter_columns  # noqa: E402
-from query_parser import parse_question  # noqa: E402
+from database import (  # noqa: E402
+    UnsafeQueryError,
+    get_db_connection,
+    get_latest_year,
+    get_schema,
+    run_readonly_query,
+    validate_select,
+)
+from sql_generator import CANNOT_ANSWER, _strip_markdown, build_prompt  # noqa: E402
 
 
-def _rows(question: str) -> list[dict]:
-    plan = build_query_plan(question)
-    return execute_plan(plan)
+def _db_available() -> bool:
+    try:
+        get_db_connection().close()
+        return True
+    except psycopg2.Error:
+        return False
 
 
-def _plan(question: str):
-    return build_query_plan(question)
+requires_db = pytest.mark.skipif(not _db_available(), reason="Postgres not reachable")
 
 
-def _names(rows: list[dict]) -> list[str]:
-    return [row["name"] for row in rows]
-
-
-# --- 1. Basic queries ---
-
-
-class TestBasicQueries:
-    def test_school_count_in_database(self):
-        stats = fetch_meta_stats()
-        assert stats["total_schools"] > 6000
-
-    def test_meta_question_plan(self):
-        plan = _plan("How many schools in database?")
-        assert plan.kind == "meta"
-        assert plan.use_claude is False
-
-    def test_top5_lowest_acceptance_rate_limit(self):
-        rows = _rows("Top 5 by lowest acceptance rate")
-        assert len(rows) == 5
-
-    def test_top5_includes_stanford_and_harvard(self):
-        names = _names(_rows("Top 5 by lowest acceptance rate"))
-        assert any("Stanford" in n for n in names)
-        assert any("Harvard" in n for n in names)
-
-    def test_top10_includes_mit(self):
-        names = _names(_rows("Top 10 by lowest acceptance rate"))
-        assert any("MIT" in n or "Massachusetts Institute of Technology" in n for n in names)
-
-
-# --- 2. State filters ---
-
-
-class TestStateFilters:
+class TestValidateSelect:
     @pytest.mark.parametrize(
-        "question,state",
+        "sql",
         [
-            ("Schools in California", "CA"),
-            ("Schools in Texas", "TX"),
+            "SELECT id, name FROM schools LIMIT 5",
+            "select id from schools;",
+            "WITH ca AS (SELECT * FROM schools WHERE state = 'CA') SELECT id FROM ca",
+            "-- top schools\nSELECT id FROM schools",
         ],
     )
-    def test_all_results_match_state(self, question, state):
-        rows = _rows(question)
-        assert len(rows) > 10
-        assert all(row["state"] == state for row in rows)
-
-    def test_california_returns_many_schools(self):
-        rows = _rows("Schools in California")
-        assert len(rows) > 100
-
-    def test_no_default_limit_on_state_query(self):
-        plan = _plan("Schools in California")
-        assert plan.limit is None
-
-
-# --- 3. Numeric filters ---
-
-
-class TestNumericFilters:
-    def test_acceptance_above_50_percent(self):
-        rows = _rows("Acceptance rate above 50%")
-        assert len(rows) > 10
-        for row in rows:
-            assert row["admission_rate"] is not None
-            assert float(row["admission_rate"]) > 0.50
-
-    def test_net_cost_under_20000(self):
-        rows = _rows("Net cost under $20,000")
-        assert len(rows) > 10
-        for row in rows:
-            assert row["cost_avg_net_price"] is not None
-            assert float(row["cost_avg_net_price"]) < 20000
-
-
-# --- 4. Income-based cost ---
-
-
-class TestIncomeBasedCost:
-    def test_85k_income_uses_75_110k_column(self):
-        plan = _plan("Cost for family making $85,000")
-        assert "cost_net_price_income_75_110k" in plan.sql
-
-    def test_110k_income_uses_110k_plus_column(self):
-        plan = _plan("My family makes $110,000")
-        assert plan.parsed.cost_column == "cost_net_price_income_110k_plus"
+    def test_allows_plain_selects(self, sql):
+        assert validate_select(sql).lower().lstrip().startswith(("select", "with"))
 
     @pytest.mark.parametrize(
-        "question,column",
+        "sql",
         [
-            ("family makes $25,000", "cost_net_price_income_0_30k"),
-            ("family makes $40,000", "cost_net_price_income_30_48k"),
-            ("family makes $60,000", "cost_net_price_income_48_75k"),
-            ("family makes $90,000", "cost_net_price_income_75_110k"),
-            ("family makes $110,000", "cost_net_price_income_110k_plus"),
-            ("family makes $150,000", "cost_net_price_income_110k_plus"),
-            ("income over $110,000", "cost_net_price_income_110k_plus"),
+            "",
+            "DELETE FROM schools",
+            "DROP TABLE schools",
+            "UPDATE schools SET name = 'x'",
+            "SELECT 1; DROP TABLE schools",
+            "SELECT pg_read_file('/etc/passwd')",
+            "SELECT pg_sleep(60)",
+            "SELECT * INTO copy_of_schools FROM schools",
+            "SELECT set_config('statement_timeout', '0', false)",
+            "COPY schools TO '/tmp/out.csv'",
+            "/* hi */ INSERT INTO schools (id) VALUES (1)",
         ],
     )
-    def test_income_bracket_mapping(self, question, column):
-        parsed = parse_question(question)
-        assert parsed.cost_column == column
+    def test_rejects_unsafe_sql(self, sql):
+        with pytest.raises(UnsafeQueryError):
+            validate_select(sql)
 
-    def test_110k_private_nonprofit_cost_query_returns_ten(self):
-        question = (
-            "My family makes $110,000. Private nonprofit, acceptance above 40%, "
-            "net cost under $30,000, sort by cost, top 10."
-        )
-        plan = _plan(question)
-        rows = _rows(question)
 
-        assert plan.parsed.cost_column == "cost_net_price_income_110k_plus"
-        assert plan.parsed.acceptance_rate_min == 0.40
-        assert plan.parsed.ownership == 2
-        assert plan.parsed.limit == 10
-        assert "cost_net_price_income_110k_plus" in plan.sql
-        assert "ORDER BY cost_net_price_income_110k_plus ASC" in plan.sql
+class TestSqlGeneratorHelpers:
+    def test_strips_markdown_fences(self):
+        assert _strip_markdown("```sql\nSELECT 1\n```") == "SELECT 1"
+
+    def test_leaves_plain_sql_alone(self):
+        assert _strip_markdown("  SELECT 1  ") == "SELECT 1"
+
+    def test_prompt_pins_latest_year_and_cannot_answer(self):
+        prompt = build_prompt("Top 5 schools", "Table: schools", "2024-25")
+        assert "schools.year = '2024-25'" in prompt
+        assert CANNOT_ANSWER in prompt
+
+
+@requires_db
+class TestReadonlyQuery:
+    def test_returns_rows(self):
+        rows = run_readonly_query("SELECT id, name FROM schools LIMIT 3")
+        assert len(rows) == 3
+        assert {"id", "name"} <= rows[0].keys()
+
+    def test_caps_row_count(self):
+        rows = run_readonly_query("SELECT id FROM schools", max_rows=10)
         assert len(rows) == 10
 
-    def test_75k_income_has_actual_cost_data(self):
-        """48-75k bracket has data in College Scorecard load."""
-        rows = _rows("Schools with cost data for family making $75,000")
-        assert len(rows) > 0
-        plan = _plan("Schools with cost data for family making $75,000")
-        assert "cost_net_price_income_48_75k" in plan.sql
-        assert any(row["cost_net_price_income_48_75k"] is not None for row in rows)
+    def test_postgres_blocks_writes_hidden_in_cte(self):
+        sql = "WITH d AS (DELETE FROM schools WHERE id = -1 RETURNING id) SELECT * FROM d"
+        with pytest.raises(psycopg2.errors.ReadOnlySqlTransaction):
+            run_readonly_query(sql)
 
-    def test_income_cost_values_are_numeric(self):
-        rows = _rows("Schools in Washington under $15,000 for families making $75,000")
-        assert len(rows) > 0
-        for row in rows:
-            cost = row["cost_net_price_income_48_75k"]
-            assert cost is not None
-            assert float(cost) < 15000
+    def test_statement_timeout(self):
+        sql = "SELECT count(*) FROM generate_series(1, 1000000000)"
+        with pytest.raises(psycopg2.errors.QueryCanceled):
+            run_readonly_query(sql)
 
 
-# --- 5. Comparison queries ---
+@requires_db
+class TestSchemaHelpers:
+    def test_latest_year(self):
+        assert get_latest_year() == "2024-25"
 
-
-class TestComparisonQueries:
-    def test_compare_stanford_and_mit(self):
-        rows = _rows("Compare Stanford and MIT")
-        assert len(rows) >= 2
-        names = " ".join(_names(rows))
-        assert "Stanford" in names
-        assert "MIT" in names or "Massachusetts Institute of Technology" in names
-
-    def test_comparison_returns_same_columns(self):
-        rows = _rows("Compare Stanford and MIT")
-        keys = set(rows[0].keys())
-        for row in rows[1:]:
-            assert set(row.keys()) == keys
-
-
-# --- 7. BETWEEN acceptance rate filters ---
-
-
-class TestBetweenAcceptanceRate:
-    FULL_QUESTION = (
-        "Schools in WA or OR with acceptance rate between 40% and 70%, "
-        "graduation rate above 50%, earnings above $45,000"
-    )
-    USER_QUESTION = (
-        "Schools in WA or OR, acceptance rate between 40-70%, "
-        "graduation rate above 50%, earnings above $45,000"
-    )
-
-    def test_wa_or_between_returns_exactly_three_schools(self):
-        rows = _rows(self.FULL_QUESTION)
-        assert len(rows) == 3
-
-    def test_user_hyphen_question_returns_exactly_three_schools(self):
-        rows = _rows(self.USER_QUESTION)
-        assert len(rows) == 3
-
-    def test_parsed_filters_match_expected_structure(self):
-        parsed = parse_question(self.USER_QUESTION)
-        assert parsed.states == ["WA", "OR"]
-        assert parsed.acceptance_rate_min == 0.40
-        assert parsed.acceptance_rate_max == 0.70
-        assert parsed.graduation_rate_min == 0.50
-        assert parsed.earnings_min == 45000
-        assert parsed.limit is None
-        assert parsed.sort_by == "earnings_median_10yr"
-        assert parsed.sort_order == "DESC"
-
-    def test_all_acceptance_rates_within_bounds(self):
-        rows = _rows(self.FULL_QUESTION)
-        for row in rows:
-            rate = float(row["admission_rate"])
-            assert 0.40 <= rate <= 0.70
-
-    def test_sql_uses_between_clause(self):
-        plan = _plan(self.FULL_QUESTION)
-        assert "admission_rate BETWEEN" in plan.sql
-        assert plan.use_claude is False
-
-    def test_above_and_below_parsed_as_between(self):
-        question = (
-            "Schools in WA or OR with acceptance rate above 40% and below 70%, "
-            "graduation rate above 50%, earnings above $45,000"
-        )
-        rows = _rows(question)
-        assert len(rows) == 3
-        for row in rows:
-            rate = float(row["admission_rate"])
-            assert 0.40 <= rate <= 0.70
-
-    @pytest.mark.parametrize(
-        "question",
-        [
-            "acceptance rate between 40% and 70%",
-            "acceptance between 40% and 70%",
-            "acceptance rate from 40% to 70%",
-            "between 40% and 70% acceptance rate",
-        ],
-    )
-    def test_between_parsing_applies_upper_bound(self, question):
-        rows = _rows(question)
-        assert len(rows) > 0
-        for row in rows:
-            rate = float(row["admission_rate"])
-            assert 0.40 <= rate <= 0.70
-
-
-class TestDataCoverage:
-    def test_sparse_columns_detected_for_acceptance_filter(self):
-        parsed = parse_question("Schools in CA with acceptance above 50%")
-        assert "admission_rate" in sparse_filter_columns(parsed)
-
-    def test_coverage_header_with_results(self):
-        header = format_coverage_header(45, [("admission_rate", "acceptance rates", 1910)])
-        assert "Found 45 schools" in header
-        assert "1,910" in header
-        assert "acceptance rates" in header
-
-    def test_coverage_header_zero_results_explains_missing_data(self):
-        header = format_coverage_header(0, [("admission_rate", "acceptance rates", 1910)])
-        assert "No schools match" in header
-        assert "1,910" in header
-        assert "acceptance rates" in header
-
-    def test_coverage_header_no_reporting_data(self):
-        header = format_coverage_header(
-            0, [("cost_net_price_income_75_110k", "cost data for $75k–$110k income", 0)]
-        )
-        assert "No schools" in header
-        assert "do not report" in header or "No schools in your search area report" in header
-
-
-class TestSortQueries:
-    def test_sort_by_earnings_with_filters(self):
-        question = (
-            "Schools with acceptance rate between 40% and 70% "
-            "sort by earnings highest first"
-        )
-        plan = _plan(question)
-        rows = _rows(question)
-
-        assert plan.parsed.sort_by == "earnings_median_10yr"
-        assert plan.parsed.sort_order == "DESC"
-        assert "ORDER BY earnings_median_10yr DESC" in plan.sql
-        assert len(rows) > 1
-        earnings = [float(r["earnings_median_10yr"]) for r in rows]
-        assert earnings == sorted(earnings, reverse=True)
-
-    def test_sort_by_earnings_standalone(self):
-        plan = _plan("Sort by earnings highest first")
-        rows = _rows("Sort by earnings highest first")
-
-        assert plan.parsed.sort_by == "earnings_median_10yr"
-        assert "ORDER BY earnings_median_10yr DESC" in plan.sql
-        assert float(rows[0]["earnings_median_10yr"]) >= float(rows[1]["earnings_median_10yr"])
-
-    def test_lowest_acceptance_rate_sort(self):
-        plan = _plan("Top 5 by lowest acceptance rate")
-        rows = _rows("Top 5 by lowest acceptance rate")
-
-        assert plan.parsed.sort_by == "admission_rate"
-        assert plan.parsed.sort_order == "ASC"
-        assert len(rows) == 5
-        rates = [float(r["admission_rate"]) for r in rows if r["admission_rate"]]
-        assert rates == sorted(rates)
-
-
-class TestComplexQueries:
-    def test_ca_acceptance_and_cost_with_income(self):
-        question = (
-            "Schools in CA with acceptance > 30% and cost < $25,000 for $85K income"
-        )
-        plan = _plan(question)
-        rows = _rows(question)
-
-        assert "state = %s" in plan.sql or "state" in plan.sql
-        assert "admission_rate" in plan.sql
-        assert "cost_net_price_income_75_110k" in plan.sql
-        assert plan.limit is None
-
-    def test_ca_acceptance_and_cost_75k_income_returns_multiple(self):
-        """Uses 48-75k bracket which has loaded data."""
-        question = (
-            "Schools in CA with acceptance > 30% and cost < $25,000 for $75K income"
-        )
-        rows = _rows(question)
-        assert len(rows) > 10
-        for row in rows:
-            assert row["state"] == "CA"
-            assert float(row["admission_rate"]) > 0.30
-            assert float(row["cost_net_price_income_48_75k"]) <= 25000
+    def test_schema_includes_both_tables(self):
+        schema = get_schema()
+        assert "Table: schools" in schema
+        assert "Table: programs" in schema
+        assert "- admission_rate: numeric" in schema
