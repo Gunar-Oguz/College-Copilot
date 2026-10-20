@@ -72,6 +72,25 @@ def run_readonly_query(sql: str, max_rows: int = MAX_ROWS) -> list[dict]:
         conn.close()
 
 
+def check_query(sql: str) -> str | None:
+    """Return None if Postgres can plan the query, otherwise the error message."""
+    try:
+        cleaned = validate_select(sql)
+    except UnsafeQueryError as exc:
+        return str(exc)
+    conn = get_db_connection()
+    try:
+        conn.set_session(readonly=True)
+        with conn.cursor() as cursor:
+            cursor.execute("EXPLAIN " + cleaned)
+        return None
+    except psycopg2.Error as exc:
+        return (exc.pgerror or str(exc)).strip()
+    finally:
+        conn.rollback()
+        conn.close()
+
+
 def execute_sql(sql: str, params: tuple | list | None = None) -> list[dict]:
     """Run trusted, application-written SQL."""
     conn = get_db_connection()

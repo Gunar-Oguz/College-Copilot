@@ -87,6 +87,16 @@
   {"id": "trend-mit-price-2019", "category": "trend", "question": "What was MIT's average net price in 2019-20?", "check": "value",
    "truth_sql": "SELECT cost_avg_net_price AS value FROM schools WHERE id = 166683 AND year = '2019-20'"},
 
+  {"id": "ambiguous-columbia-college", "category": "ambiguous", "question": "What is Columbia College's graduation rate?", "check": "clarify"},
+  {"id": "ambiguous-uw", "category": "ambiguous", "question": "What's the acceptance rate at UW?", "check": "clarify"},
+  {"id": "ambiguous-miami", "category": "ambiguous", "question": "How much does Miami cost?", "check": "clarify"},
+  {"id": "disambiguated-columbia-mo", "category": "ambiguous", "question": "What is the graduation rate at Columbia College in Missouri?", "check": "value",
+   "truth_sql": "SELECT completion_rate AS value FROM schools WHERE id = 177065 AND year = '2024-25'"},
+  {"id": "disambiguated-wyoming", "category": "ambiguous", "question": "How many students go to the University of Wyoming?", "check": "value",
+   "truth_sql": "SELECT student_size AS value FROM schools WHERE id = 240727 AND year = '2024-25'"},
+  {"id": "disambiguated-u-miami", "category": "ambiguous", "question": "What is the average net price at the University of Miami in Florida?", "check": "value",
+   "truth_sql": "SELECT cost_avg_net_price AS value FROM schools WHERE id = 135726 AND year = '2024-25'"},
+
   {"id": "unanswerable-usnews", "category": "unanswerable", "question": "What is Harvard's US News ranking?", "check": "cannot_answer"},
   {"id": "unanswerable-deadlines", "category": "unanswerable", "question": "When is the early decision deadline for Yale?", "check": "cannot_answer"},
   {"id": "unanswerable-dorms", "category": "unanswerable", "question": "Which colleges have the best dorms?", "check": "cannot_answer"},

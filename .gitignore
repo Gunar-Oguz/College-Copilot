@@ -9,6 +9,7 @@ logs/
 # Data files (keep schema SQL tracked)
 data/*
 !data/*.sql
+!data/school_aliases_curated.csv
 
 # Environment
 .env

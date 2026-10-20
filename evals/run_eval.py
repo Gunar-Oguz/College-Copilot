@@ -7,6 +7,7 @@ and a check type:
   top_n         generated ids are the correct top n (ties at the cutoff allowed)
   ids_set       generated ids are exactly the truth ids
   cannot_answer generator returns CANNOT_ANSWER
+  clarify       generator asks which school was meant
 
 Usage (from the repo root, needs ANTHROPIC_API_KEY and Postgres):
     python evals/run_eval.py                 # run all cases
@@ -32,7 +33,7 @@ load_dotenv(ROOT_DIR / ".env")
 load_dotenv(ROOT_DIR / "backend" / ".env")
 
 from database import execute_sql, run_readonly_query  # noqa: E402
-from sql_generator import CANNOT_ANSWER, generate_sql  # noqa: E402
+from sql_generator import CANNOT_ANSWER, CLARIFY_PREFIX, generate_sql  # noqa: E402
 
 EVAL_DIR = Path(__file__).resolve().parent
 RESULTS_DIR = EVAL_DIR / "results"
@@ -109,7 +110,7 @@ CHECKS = {"value": check_value, "top_n": check_top_n, "ids_set": check_ids_set}
 
 
 def load_truth(case) -> list[dict]:
-    if case["check"] == "cannot_answer":
+    if case["check"] in ("cannot_answer", "clarify"):
         return []
     rows = execute_sql(case["truth_sql"])
     if not rows:
@@ -131,6 +132,11 @@ def run_case(case) -> dict:
         if case["check"] == "cannot_answer":
             passed = sql == CANNOT_ANSWER
             reason = "" if passed else "answered instead of saying it can't"
+        elif case["check"] == "clarify":
+            passed = sql.startswith(CLARIFY_PREFIX)
+            reason = "" if passed else "guessed instead of asking which school"
+        elif sql.startswith(CLARIFY_PREFIX):
+            passed, reason = False, f"asked unnecessarily: {sql}"
         elif sql == CANNOT_ANSWER:
             passed, reason = False, "said it can't answer"
         else:

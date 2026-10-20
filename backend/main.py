@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from database import UnsafeQueryError, execute_sql, get_latest_year, run_readonly_query
-from sql_generator import CANNOT_ANSWER, generate_sql
+from sql_generator import CANNOT_ANSWER, CLARIFY_PREFIX, generate_sql
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -115,6 +115,9 @@ def ask(request: AskRequest):
         logger.info("SQL: %s", sql)
         if sql == CANNOT_ANSWER:
             return AskResponse(question=question, response=NO_ANSWER_MESSAGE, schools_considered=0)
+        if sql.startswith(CLARIFY_PREFIX):
+            clarification = sql.removeprefix(CLARIFY_PREFIX).strip()
+            return AskResponse(question=question, response=clarification, schools_considered=0)
 
         data = run_readonly_query(sql)
         logger.info("Results: %d", len(data))
