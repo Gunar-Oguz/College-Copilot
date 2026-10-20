@@ -29,6 +29,7 @@ from database import (  # noqa: E402
 from school_lookup import normalize, resolve_school  # noqa: E402
 from planner import _Session, build_prompt, net_price_column  # noqa: E402
 from similar_schools import find_similar_schools  # noqa: E402
+from locations import normalize_city, resolve_location  # noqa: E402
 
 
 def _db_available() -> bool:
@@ -227,3 +228,53 @@ class TestResolveSchool:
 
     def test_nonsense_returns_nothing(self):
         assert resolve_school("zzqx") == []
+
+
+def _zip_codes_loaded() -> bool:
+    if not _db_available():
+        return False
+    try:
+        with get_db_connection() as conn, conn.cursor() as cursor:
+            cursor.execute("SELECT to_regclass('zip_codes') IS NOT NULL")
+            return cursor.fetchone()[0]
+    except psycopg2.Error:
+        return False
+
+
+def test_normalize_city():
+    assert normalize_city("St. Louis") == "saint louis"
+    assert normalize_city("Ft Worth") == "fort worth"
+
+
+@pytest.mark.skipif(not _zip_codes_loaded(), reason="zip_codes not loaded")
+class TestLocations:
+    def test_zip_code(self):
+        [berkeley] = resolve_location("94720-1234")
+        assert berkeley["label"] == "94720 (Berkeley, CA)"
+        assert abs(berkeley["latitude"] - 37.87) < 0.05
+
+    def test_city_candidates_largest_first(self):
+        candidates = resolve_location("Austin")
+        assert candidates[0]["label"] == "Austin, TX"
+        assert len(candidates) > 1
+
+    @pytest.mark.parametrize("place,label", [("Austin, TX", "Austin, TX"), ("St. Louis MO", "Saint Louis, MO")])
+    def test_state_suffix(self, place, label):
+        assert [c["label"] for c in resolve_location(place)] == [label]
+
+    def test_unknown_place(self):
+        assert resolve_location("Nowhereville") == []
+
+    def test_large_universities_have_coordinates(self):
+        # These have their own ZIP codes, so coordinates must come from College Scorecard.
+        rows = run_readonly_query(
+            f"SELECT id FROM schools WHERE year = '{get_latest_year()}' "
+            "AND id IN (104151, 100751) AND latitude IS NOT NULL"
+        )
+        assert len(rows) == 2
+
+    def test_miles_between(self):
+        [row] = run_readonly_query(
+            "SELECT miles_between(34.0689, -118.4452, 37.8719, -122.2585) AS miles"
+        )
+        assert 330 < row["miles"] < 345  # UCLA to Berkeley

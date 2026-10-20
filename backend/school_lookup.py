@@ -31,7 +31,7 @@ best AS (
     SELECT DISTINCT ON (school_id) school_id, matched, match_type, score
     FROM scored ORDER BY school_id, score DESC
 )
-SELECT s.id, s.name, s.city, s.state, s.student_size,
+SELECT s.id, s.name, s.city, s.state, s.student_size, s.latitude, s.longitude,
        b.matched, b.match_type, round(b.score::numeric, 2) AS score
 FROM best b
 JOIN schools s ON s.id = b.school_id AND s.year = %(year)s
@@ -55,4 +55,6 @@ def resolve_school(name: str, limit: int = 5) -> list[dict]:
     )
     for row in rows:
         row["score"] = float(row["score"])
+        for key in ("latitude", "longitude"):
+            row[key] = float(row[key]) if row[key] is not None else None
     return rows

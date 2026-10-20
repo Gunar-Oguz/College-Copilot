@@ -143,7 +143,7 @@ def ask(request: AskRequest):
         return AskResponse(
             question=question,
             kind="result",
-            response=write_summary(question, rows, source),
+            response=write_summary(question, rows, f"{source} {answer.source}"),
             blocks=build_blocks(rows, answer.highlight),
             source=source,
             schools_considered=len(answer.rows),

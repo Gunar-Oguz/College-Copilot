@@ -6,7 +6,7 @@ Every number shown is formatted here from the rows, never written by the model.
 import re
 from decimal import ROUND_HALF_UP, Decimal
 
-HIDDEN_COLUMNS = {"id", "school_id", "role", "year"}
+HIDDEN_COLUMNS = {"id", "school_id", "role", "year", "latitude", "longitude"}
 TEXT_COLUMNS = {"name", "city", "state", "program_name", "credential_name", "cip_code", "school_url"}
 MAX_BARS = 25
 MAX_COMPARE_SCHOOLS = 6
@@ -48,6 +48,7 @@ COLUMNS = {
     "first_gen_rate": ("First-generation students", "percent", None),
     "part_time_rate": ("Part-time students", "percent", None),
     "female_share": ("Women", "percent", None),
+    "distance_miles": ("Distance", "miles", None),
     "similarity": ("Similarity", "score", "higher"),
     "similar_on": ("Similar on", "list", None),
 }
@@ -100,6 +101,8 @@ def format_value(value, fmt: str) -> str:
         return f"{sign}${abs(number):,.0f}"
     if fmt == "int":
         return f"{number:,.0f}"
+    if fmt == "miles":
+        return f"{number:,.1f} mi"
     if fmt == "score":
         return f"{number * 100:.0f}%"
     return f"{number:,.0f}" if number == int(number) else f"{number:,.2f}"
@@ -235,7 +238,7 @@ def build_blocks(rows: list[dict], highlight: str | None = None) -> list[dict]:
     return blocks
 
 
-_NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+_NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?(?:k\b)?", re.IGNORECASE)
 
 
 def _canonical(number: float) -> str:
@@ -255,7 +258,12 @@ def _number_forms(value) -> set[str]:
 
 
 def _tokens(text: str) -> list[tuple[str, str]]:
-    return [(t, _canonical(float(t.replace(",", "")))) for t in _NUMBER_RE.findall(text)]
+    """(token, normalized value) for each number in text; "60k" is 60,000."""
+    tokens = []
+    for token in _NUMBER_RE.findall(text):
+        number = float(token.rstrip("kK").replace(",", ""))
+        tokens.append((token, _canonical(number * 1000 if token[-1] in "kK" else number)))
+    return tokens
 
 
 def unsupported_numbers(summary: str, rows: list[dict], context: str) -> list[str]:

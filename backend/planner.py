@@ -13,6 +13,7 @@ import anthropic
 import psycopg2
 
 from database import UnsafeQueryError, get_latest_year, get_schema, run_readonly_query
+from locations import resolve_location
 from school_lookup import resolve_school
 from similar_schools import find_similar_schools
 
@@ -40,6 +41,9 @@ COLUMN_NOTES = """
   5 = master's, 6 = doctoral, 7 = first professional, 8 = graduate certificate.
   cip_code is the 4-digit CIP family as text 'NN.NN', e.g. '11.07' = Computer Science,
   '51.38' = Registered Nursing, '52.02' = Business Administration. There are no 6-digit codes.
+- schools.latitude / schools.longitude locate each campus. miles_between(lat1, lon1, lat2, lon2)
+  returns the distance in miles, e.g.
+  miles_between(schools.latitude, schools.longitude, 30.30526, -97.76259) AS distance_miles.
 """.strip()
 
 TOOLS = [
@@ -47,12 +51,28 @@ TOOLS = [
         "name": "resolve_school",
         "description": (
             "Look up a school by name or nickname (e.g. 'UCLA', 'Penn', 'UW'). Returns candidates "
-            "with id, name, city, state, student_size and a match score (1.0 = exact name or alias)."
+            "with id, name, city, state, student_size, latitude, longitude and a match score "
+            "(1.0 = exact name or alias)."
         ),
         "input_schema": {
             "type": "object",
             "properties": {"name": {"type": "string"}},
             "required": ["name"],
+        },
+    },
+    {
+        "name": "resolve_location",
+        "description": (
+            "Look up a ZIP code or city (e.g. '94720', 'Austin, TX', 'Springfield') for distance "
+            "searches. Returns candidates with label, latitude, longitude and population, largest first."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "place": {"type": "string", "description": "5-digit ZIP code or city name"},
+                "state": {"type": "string", "description": "Optional 2-letter state code"},
+            },
+            "required": ["place"],
         },
     },
     {
@@ -166,6 +186,13 @@ RULES:
   short question listing them with city and state.
 - For any family income, call net_price_column to get the cost column.
 - For "schools like X" questions, use find_similar_schools.
+- For "near", "within N miles of" or "close to" a city or ZIP, call resolve_location and use its
+  coordinates with miles_between in run_query. Use the first candidate when it is much larger than
+  the rest or the state is given; if several similar-sized places fit, submit clarify. Near a
+  school, use the latitude/longitude that resolve_school returned for it. Never guess coordinates.
+  Select the distance AS distance_miles and always add WHERE miles_between(...) <= the radius
+  (25 miles if none is given; skip it only for "the N closest"). Sort by distance unless asked
+  otherwise.
 - In run_query: filter schools.year = '{latest_year}' unless the question asks about other years;
   select schools.id and schools.name plus every column used to filter or sort; exclude NULLs in
   filtered or sorted columns; add LIMIT 50 unless a number or count is asked for.
@@ -196,6 +223,8 @@ class _Session:
         try:
             if name == "resolve_school":
                 return json.dumps(resolve_school(args.get("name", "")), default=str)
+            if name == "resolve_location":
+                return json.dumps(resolve_location(args.get("place", ""), args.get("state")))
             if name == "net_price_column":
                 return json.dumps(net_price_column(float(args["family_income"])))
             if name == "find_similar_schools":

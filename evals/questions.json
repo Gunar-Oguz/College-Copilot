@@ -111,5 +111,12 @@
   {"id": "unanswerable-dorms", "category": "unanswerable", "question": "Which colleges have the best dorms?", "check": "cannot_answer"},
   {"id": "unanswerable-future", "category": "unanswerable", "question": "What will UCLA's acceptance rate be in 2030?", "check": "cannot_answer"},
   {"id": "unanswerable-essays", "category": "unanswerable", "question": "What are Stanford's supplemental essay prompts?", "check": "cannot_answer"},
-  {"id": "unanswerable-football", "category": "unanswerable", "question": "Which colleges have the best football teams?", "check": "cannot_answer"}
+  {"id": "unanswerable-football", "category": "unanswerable", "question": "Which colleges have the best football teams?", "check": "cannot_answer"},
+  {"id": "near-austin-30mi", "category": "location", "question": "Which colleges are within 30 miles of Austin, TX?", "check": "ids_set",
+   "truth_sql": "SELECT id FROM schools WHERE year = '2024-25' AND miles_between(latitude, longitude, 30.30526, -97.76259) <= 30"},
+  {"id": "near-zip-public-grad", "category": "location", "question": "Public colleges within 40 miles of 94720 with a graduation rate above 70%", "check": "ids_set",
+   "truth_sql": "SELECT id FROM schools WHERE year = '2024-25' AND ownership = 1 AND completion_rate > 0.7 AND miles_between(latitude, longitude, 37.87396, -122.25477) <= 40"},
+  {"id": "near-ucla-closest", "category": "location", "question": "Find the 5 closest schools to UCLA", "check": "top_n", "n": 5,
+   "truth_sql": "SELECT id, miles_between(latitude, longitude, (SELECT latitude FROM schools WHERE id = 110662 AND year = '2024-25'), (SELECT longitude FROM schools WHERE id = 110662 AND year = '2024-25')) AS rank_value FROM schools WHERE year = '2024-25' AND id <> 110662 AND latitude IS NOT NULL ORDER BY rank_value"},
+  {"id": "near-springfield-ambiguous", "category": "location", "question": "What colleges are close to Springfield?", "check": "clarify"}
 ]

@@ -125,3 +125,17 @@ class TestUnsupportedNumbers:
 
     def test_numbers_from_question_are_allowed(self):
         assert unsupported_numbers("The 5 closest matches.", self.ROWS, "Find 5 schools like UCLA") == []
+
+    @pytest.mark.parametrize("summary", ["For a family making $60,000, UCLA costs $12,548.", "At $60k, UCLA costs $12,548."])
+    def test_thousands_shorthand_matches_full_number(self, summary):
+        assert unsupported_numbers(summary, self.ROWS, "My family makes $60k") == []
+
+
+class TestDistance:
+    def test_distance_formats_as_miles_and_hides_coordinates(self):
+        rows = [school(i, distance_miles=Decimal(f"{i}.4"), latitude=30.1, longitude=-97.7) for i in range(1, 9)]
+        bars, table = build_blocks(rows, "distance_miles")
+        assert bars["title"] == "Distance"
+        assert bars["items"][0]["display"] == "1.4 mi"
+        labels = [c["label"] for c in table["columns"]]
+        assert "Distance" in labels and "Latitude" not in labels and "Longitude" not in labels
