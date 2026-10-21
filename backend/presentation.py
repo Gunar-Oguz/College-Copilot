@@ -4,15 +4,22 @@ Every number shown is formatted here from the rows, never written by the model.
 """
 
 import re
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-HIDDEN_COLUMNS = {"id", "school_id", "role", "year", "latitude", "longitude", "carnegie_class", "highest_degree"}
+HIDDEN_COLUMNS = {"id", "school_id", "unitid", "role", "year", "latitude", "longitude", "carnegie_class", "highest_degree"}
 TEXT_COLUMNS = {"name", "title", "soc_code", "city", "state", "program_name", "credential_name", "cip_code", "school_url"}
 MAX_BARS = 25
 MAX_COMPARE_SCHOOLS = 6
 MIN_COMPARE_METRICS = 2
+MAX_DEADLINE_SCHOOLS = 3  # more schools than this share one table
 
 YES_NO = {True: "Yes", False: "No"}
+DEADLINE_LABELS = {
+    "early_decision": "Early Decision", "early_decision_2": "Early Decision II", "early_action": "Early Action",
+    "restrictive_early_action": "Restrictive Early Action", "regular": "Regular Decision",
+    "rolling": "Rolling admission", "priority": "Priority deadline",
+}
 OWNERSHIP_LABELS = {1: "Public", 2: "Private nonprofit", 3: "Private for-profit"}
 
 # column -> (label, format, better): better is "higher", "lower" or None
@@ -68,6 +75,8 @@ def column_meta(key: str, sample=None) -> tuple[str, str, str | None]:
         return COLUMNS[key]
     if isinstance(sample, bool):
         return _humanize(key), "yesno", None
+    if isinstance(sample, date):
+        return _humanize(key), "date", None
     if key in TEXT_COLUMNS or isinstance(sample, str):
         return _humanize(key), "text", None
     if isinstance(sample, list):
@@ -98,6 +107,8 @@ def format_value(value, fmt: str) -> str:
         return OWNERSHIP_LABELS.get(value, str(value))
     if fmt == "yesno":
         return YES_NO.get(value, str(value))
+    if fmt == "date" and isinstance(value, date):
+        return f"{value:%B} {value.day}, {value.year}"
     number = _to_float(value)
     if fmt == "text" or number is None:
         return str(value)
@@ -140,14 +151,14 @@ def _metric_columns(rows: list[dict], columns: list[str]) -> list[str]:
     for key in columns:
         sample = next((r[key] for r in rows if r.get(key) is not None), None)
         _, fmt, _ = column_meta(key, sample)
-        if fmt not in ("text", "list", "ownership", "yesno") and sample is not None:
+        if fmt not in ("text", "list", "ownership", "yesno", "date") and sample is not None:
             metrics.append(key)
     return metrics
 
 
 def _school_id(row: dict) -> int | None:
     """The school a row describes (for the Save button), or None for non-school rows."""
-    value = row.get("id", row.get("school_id"))
+    value = row.get("id", row.get("school_id", row.get("unitid")))
     return value if isinstance(value, int) and row.get("name") else None
 
 
@@ -217,7 +228,7 @@ def _table_block(rows: list[dict], columns: list[str]) -> dict:
         metas.append((key, *column_meta(key, sample)))
     return {
         "type": "table",
-        "columns": [{"label": label, "numeric": fmt not in ("text", "list", "ownership", "yesno")}
+        "columns": [{"label": label, "numeric": fmt not in ("text", "list", "ownership", "yesno", "date")}
                     for _, label, fmt, _ in metas],
         "rows": [
             {
@@ -228,6 +239,49 @@ def _table_block(rows: list[dict], columns: list[str]) -> dict:
             for r in rows
         ],
     }
+
+
+def _deadline_type(row: dict) -> str:
+    kind = row.get("deadline_type")
+    label = DEADLINE_LABELS.get(kind, _humanize(str(kind or "Deadline")))
+    notes = str(row.get("notes") or "").lower()
+    return f"{label} (binding)" if "binding" in notes and "non-binding" not in notes else label
+
+
+def _deadline_date(row: dict) -> str:
+    value = row.get("deadline_date")
+    if value is None:
+        return "Rolling" if row.get("deadline_type") == "rolling" else "Not reported"
+    return format_value(value, "date")
+
+
+def _by_date(row: dict) -> tuple:
+    return row.get("deadline_date") is None, row.get("deadline_date") or date.min
+
+
+def _deadline_blocks(rows: list[dict]) -> list[dict]:
+    """Application deadlines: a "Deadline Type | Date" table per school, or one table for many schools."""
+    groups: dict = {}
+    for row in rows:
+        key = row.get("id", row.get("school_id", row.get("unitid"))) or row.get("name")
+        groups.setdefault(key, []).append(row)
+    if len(groups) > MAX_DEADLINE_SCHOOLS:
+        return [{
+            "type": "table",
+            "columns": [{"label": label, "numeric": False} for label in ("School", "Deadline Type", "Date")],
+            "rows": [{"reference": False, "school_id": _school_id(r),
+                      "cells": [str(r.get("name") or "Not reported"), _deadline_type(r), _deadline_date(r)]}
+                     for r in rows],
+        }]
+    return [
+        {
+            "type": "deadlines",
+            "title": school_rows[0].get("name"),
+            "school_id": _school_id(school_rows[0]),
+            "rows": [{"type": _deadline_type(r), "date": _deadline_date(r)} for r in sorted(school_rows, key=_by_date)],
+        }
+        for school_rows in groups.values()
+    ]
 
 
 def pick_highlight(rows: list[dict], requested: str | None) -> str | None:
@@ -244,6 +298,8 @@ def pick_highlight(rows: list[dict], requested: str | None) -> str | None:
 def build_blocks(rows: list[dict], highlight: str | None = None) -> list[dict]:
     if not rows:
         return []
+    if all({"deadline_type", "deadline_date"} <= r.keys() for r in rows):
+        return _deadline_blocks(rows)
     highlight = pick_highlight(rows, highlight)
     columns = _visible_columns(rows, highlight)
     metrics = _metric_columns(rows, columns)

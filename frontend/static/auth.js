@@ -79,11 +79,17 @@ function escapeHtml(text) {
 }
 
 // Heart button for a school; its state comes from the signed-in user's favorites.
-function saveButton(schoolId, name) {
+// A heart button; `labeled` adds the words ("♡ Save to My Schools").
+function saveButton(schoolId, name, labeled = false) {
   if (!schoolId || !authReady) return "";
   const saved = favorites.has(schoolId);
-  return `<button type="button" class="save-btn" data-school-id="${schoolId}"
-    aria-pressed="${saved}" aria-label="Save ${escapeHtml(name)}" title="Save school">${saved ? "♥" : "♡"}</button>`;
+  return `<button type="button" class="save-btn${labeled ? " labeled" : ""}" data-school-id="${schoolId}"
+    aria-pressed="${saved}" aria-label="Save ${escapeHtml(name)}" title="Save school">${heartText(saved, labeled)}</button>`;
+}
+
+function heartText(saved, labeled) {
+  if (!labeled) return saved ? "♥" : "♡";
+  return saved ? "♥ Saved to My Schools" : "♡ Save to My Schools";
 }
 
 // ---------- Accounts (Supabase Auth) ----------
@@ -293,7 +299,7 @@ function refreshHearts() {
   document.querySelectorAll(".save-btn").forEach(btn => {
     const saved = favorites.has(Number(btn.dataset.schoolId));
     btn.setAttribute("aria-pressed", String(saved));
-    btn.textContent = saved ? "♥" : "♡";
+    btn.textContent = heartText(saved, btn.classList.contains("labeled"));
   });
   const count = document.getElementById("saved-count");
   if (count) {

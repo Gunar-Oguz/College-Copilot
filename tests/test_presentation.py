@@ -166,3 +166,51 @@ def test_blocks_carry_school_ids_for_saving():
     assert two[0]["school_ids"] == [1, 2]
     jobs = build_blocks([{"soc_code": "15-1252", "title": "Software Developers", "median_annual_salary": 1}])
     assert jobs[0]["school_id"] is None
+
+
+def _deadline(unitid, name, kind, when, notes=None):
+    return {"unitid": unitid, "name": name, "deadline_type": kind, "deadline_date": when, "notes": notes}
+
+
+def test_deadlines_show_type_and_date_per_school():
+    from datetime import date
+    blocks = build_blocks([
+        _deadline(166683, "Massachusetts Institute of Technology", "regular", date(2027, 1, 4)),
+        _deadline(166683, "Massachusetts Institute of Technology", "early_action", date(2026, 11, 1)),
+    ])
+    assert blocks == [{
+        "type": "deadlines",
+        "title": "Massachusetts Institute of Technology",
+        "school_id": 166683,
+        "rows": [{"type": "Early Action", "date": "November 1, 2026"},
+                 {"type": "Regular Decision", "date": "January 4, 2027"}],
+    }]
+
+
+def test_deadlines_mark_binding_and_rolling():
+    from datetime import date
+    rows = [_deadline(1, "A", "early_decision", date(2026, 11, 1), "Early Decision (binding); grid"),
+            _deadline(1, "A", "rolling", None)]
+    assert [r["type"] for r in build_blocks(rows)[0]["rows"]] == ["Early Decision (binding)", "Rolling admission"]
+    assert build_blocks(rows)[0]["rows"][1]["date"] == "Rolling"
+
+
+def test_many_schools_deadlines_share_one_table_without_ids():
+    from datetime import date
+    rows = [_deadline(i, f"School {i}", "regular", date(2027, 1, 1)) for i in range(1, 6)]
+    [block] = build_blocks(rows)
+    assert block["type"] == "table"
+    assert [c["label"] for c in block["columns"]] == ["School", "Deadline Type", "Date"]
+    assert block["rows"][0]["cells"] == ["School 1", "Regular Decision", "January 1, 2027"]
+    assert block["rows"][0]["school_id"] == 1
+
+
+def test_unitid_is_hidden_and_dates_are_not_metrics():
+    from datetime import date
+    rows = [{"unitid": 1, "name": "A", "opens": date(2026, 8, 1), "admission_rate": 0.5},
+            {"unitid": 2, "name": "B", "opens": date(2026, 9, 1), "admission_rate": 0.4}]
+    blocks = build_blocks(rows)
+    assert all(b["type"] != "compare" for b in blocks)
+    table = blocks[-1]
+    assert "Unitid" not in [c["label"] for c in table["columns"]]
+    assert "August 1, 2026" in table["rows"][0]["cells"]

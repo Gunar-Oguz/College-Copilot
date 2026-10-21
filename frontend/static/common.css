@@ -182,6 +182,17 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .save-btn:focus-visible { outline: 2px solid rgba(225, 29, 72, 0.4); }
 .stats-title { display: flex; align-items: center; gap: 2px; }
 .bar-row .name .save-btn { font-size: 0.9rem; padding: 0 3px; }
+.save-btn.labeled {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  margin: 0;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e11d48;
+  background: #fff;
+}
+.save-btn.labeled[aria-pressed="true"] { background: #fff1f2; border-color: #fecdd3; }
 .sign-in-hint { font-size: 0.8rem; color: var(--muted); }
 .link-btn {
   background: none;

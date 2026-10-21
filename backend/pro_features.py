@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta, timezone  # noqa: F401
 from psycopg2.extras import RealDictCursor
 
 from database import execute_sql, get_db_connection
-from presentation import unsupported_numbers
+from presentation import DEADLINE_LABELS, unsupported_numbers
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS user_checklist_items (
@@ -58,11 +58,6 @@ CREATE POLICY own_rows ON user_profiles
     WITH CHECK (user_id = current_setting('app.user_id', true));
 """
 
-DEADLINE_LABELS = {
-    "early_decision": "Early Decision", "early_decision_2": "Early Decision II", "early_action": "Early Action",
-    "restrictive_early_action": "Restrictive Early Action", "regular": "Regular Decision",
-    "rolling": "Rolling admission", "priority": "Priority deadline",
-}
 
 
 def ensure_pro_tables() -> None:
