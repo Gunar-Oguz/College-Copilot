@@ -38,6 +38,28 @@ REQUESTED_COUNT_RES = [
                r"occupations|options|places)\b", re.IGNORECASE),
 ]
 
+# Questions with no criteria to search by ("Help me find a good school").
+_SCHOOL = r"(?:school|college|university|schools|colleges|universities)"
+VAGUE_RES = [
+    re.compile(rf"^(?:hi|hello|hey)?[\s,!.]*(?:please\s+)?(?:can|could|would)?\s*(?:you\s+)?(?:please\s+)?"
+               rf"(?:help\s+me\s+)?(?:to\s+)?(?:find|pick|choose|select|recommend|suggest)\s+(?:me\s+)?"
+               rf"(?:a|an|the|some|my)?\s*(?:good|great|right|best|perfect|nice)?\s*{_SCHOOL}"
+               rf"(?:\s+for\s+me)?[\s?!.]*(?:please)?[\s?!.]*$", re.IGNORECASE),
+    re.compile(rf"^(?:what|which)\s+{_SCHOOL}\s+(?:should|could|can)\s+i\s+(?:go\s+to|attend|apply\s+to|"
+               rf"choose|pick)[\s?!.]*$", re.IGNORECASE),
+    re.compile(rf"^(?:what|which)\s+(?:is|are)\s+(?:the\s+)?(?:right|best)\s+{_SCHOOL}\s+for\s+me[\s?!.]*$",
+               re.IGNORECASE),
+    re.compile(r"^(?:where\s+should\s+i\s+(?:apply|go)(?:\s+to\s+college)?|i\s+need\s+help\s+"
+               rf"(?:finding|choosing|picking)\s+(?:a\s+)?{_SCHOOL}|help)[\s?!.]*$", re.IGNORECASE),
+]
+VAGUE_MESSAGE = "Happy to help! What matters most to you? Pick one below, or tell me in your own words."
+QUICK_REPLIES = [
+    {"label": "📍 Location", "question": "Help me find good colleges in a specific location"},
+    {"label": "💰 Affordable", "question": "What are the most affordable colleges with strong graduation rates?"},
+    {"label": "🎓 Top ranked", "question": "What are the top ranked colleges?"},
+    {"label": "💻 Specific major", "question": "Help me find the best colleges for a specific major"},
+]
+
 UNIVERSITY_HINT = (
     "This question asks about universities or four-year colleges: when listing or ranking schools, add "
     "schools.carnegie_class BETWEEN 15 AND 23 (doctoral, master's and baccalaureate institutions)."
@@ -51,6 +73,11 @@ RANKING_NOTE = "There's no official ranking in this data, so results are ordered
 SCORE_NOTE = ("Ranked by the CollegeCopilot Score: 40% graduation rate, 30% median earnings, "
               "20% selectivity and 10% student-faculty ratio, each compared with other colleges.")
 FEWER_NOTE = "Only {count} result{s} in the data {verb}, so this shows fewer than the {requested} you asked for."
+
+
+def is_vague(question: str) -> bool:
+    """True for questions that give nothing to search by, like "Help me find a good school"."""
+    return any(pattern.search(question.strip()) for pattern in VAGUE_RES)
 
 
 def question_hints(question: str) -> str:

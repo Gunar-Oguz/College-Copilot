@@ -44,7 +44,7 @@ def _cleanup():
 
 @pytest.fixture
 def client(monkeypatch):
-    def fake_answer(question):
+    def fake_answer(question, history=None):
         response = main.AskResponse(question=question, kind="result", response="UCLA's graduation rate is 93.0%.")
         return response, [{"id": 110662, "name": "UCLA"}], "SELECT completion_rate FROM schools"
     monkeypatch.setattr(main, "answer_question", fake_answer)

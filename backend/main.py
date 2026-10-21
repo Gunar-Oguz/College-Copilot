@@ -14,7 +14,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import admin_page
 import app_logs
@@ -25,7 +25,7 @@ import pro_features
 import stripe
 import user_data
 from database import execute_sql, get_data_sources, get_latest_year
-from guardrails import check_answer, ranking_basis, schools_named_in
+from guardrails import QUICK_REPLIES, VAGUE_MESSAGE, check_answer, is_vague, ranking_basis, schools_named_in
 from planner import plan_answer
 from presentation import build_blocks, unsupported_numbers
 from school_profile import compare_schools, school_basics, school_profile, search_schools
@@ -64,8 +64,18 @@ app.add_middleware(
 )
 
 
+HISTORY_TURNS = 3  # earlier question/answer pairs sent to the planner for follow-ups
+MEMORY_CHARS = 300  # an answer's summary is cut to about this length
+
+
+class Turn(BaseModel):
+    question: str = Field(max_length=500)
+    answer: str = Field(max_length=800)  # the "memory" text returned with that answer
+
+
 class AskRequest(BaseModel):
     question: str
+    history: list[Turn] = Field(default=[], max_length=10)  # this chat's earlier turns, oldest first
 
 
 class AskResponse(BaseModel):
@@ -79,6 +89,8 @@ class AskResponse(BaseModel):
     log_id: int | None = None  # for thumbs up/down
     fallback: dict | None = None  # for "can't answer": what we do know, and questions we can answer
     usage: dict | None = None  # {"used", "limit", "plan"} for today's questions
+    quick_replies: list[dict] = []  # [{"label", "question"}] buttons for vague questions
+    memory: str | None = None  # short summary the chat sends back with follow-up questions
 
 
 SUMMARY_SYSTEM_PROMPT = """You are CollegeCopilot. Write a one- or two-sentence summary that
@@ -209,18 +221,39 @@ def with_school_names(rows: list[dict]) -> list[dict]:
             for r in rows]
 
 
-def answer_question(question: str) -> tuple[AskResponse, list[dict], str]:
+def vague_response(question: str) -> AskResponse:
+    return AskResponse(question=question, kind="clarify", response=VAGUE_MESSAGE, quick_replies=QUICK_REPLIES)
+
+
+def memory_of(response: AskResponse, rows: list[dict]) -> str:
+    """A short version of an answer for follow-up questions: its summary and the schools it showed."""
+    text = response.response
+    if len(text) > MEMORY_CHARS:
+        text = text[:MEMORY_CHARS].rsplit(" ", 1)[0] + "..."
+    names = list(dict.fromkeys(str(r["name"]) for r in rows if r.get("name")))
+    if response.fallback and response.fallback.get("school"):
+        names = names or [response.fallback["school"]["name"]]
+    if names:
+        more = f" and {len(names) - 5} more" if len(names) > 5 else ""
+        text += f" Schools shown: {', '.join(names[:5])}{more}."
+    return text
+
+
+def answer_question(question: str, history: list[dict] | None = None) -> tuple[AskResponse, list[dict], str]:
     """The answer, the rows behind it, and the SQL or tool call that produced them."""
-    answer = plan_answer(question)
+    answer = plan_answer(question, history)
     logger.info("Plan: kind=%s trace=%s", answer.kind, answer.trace)
     trace = "\n".join(answer.trace)
     if answer.kind == "cannot_answer":
         school_ids = answer.school_ids or schools_named_in(question)
         return cannot_answer_response(question, school_ids), [], trace
     if answer.kind == "clarify":
+        if answer.vague:
+            return vague_response(question), [], trace
         return AskResponse(question=question, kind="clarify", response=answer.clarification), [], trace
 
-    rows, notes = check_answer(question, answer.rows, answer.source)
+    asked = answer.standalone_question or question  # what a follow-up means on its own
+    rows, notes = check_answer(asked, answer.rows, answer.source)
     rows = with_school_names(rows[:SUMMARY_ROW_LIMIT])
     logger.info("Results: %d from %s", len(rows), answer.source)
     if not rows:
@@ -230,7 +263,7 @@ def answer_question(question: str) -> tuple[AskResponse, list[dict], str]:
     response = AskResponse(
         question=question,
         kind="result",
-        response=write_summary(question, rows, f"{source} {answer.source}", ranking_basis(answer.source)),
+        response=write_summary(asked, rows, f"{source} {answer.source}", ranking_basis(answer.source)),
         blocks=build_blocks(rows, answer.highlight),
         notes=notes,
         source=source,
@@ -278,6 +311,11 @@ def ask(request: AskRequest, http: Request, authorization: str | None = Header(d
 
     logger.info("Question: %s", question)
     started = time.monotonic()
+    if is_vague(question):  # answered without the AI, so it doesn't count toward the daily limit
+        response = vague_response(question)
+        response.log_id = _log(question, None, response.response, started, "clarify")
+        response.memory = response.response
+        return response
     user_id = _optional_user_id(authorization)
     pro = plans.is_pro(user_id)
     limit = None if pro else plans.FREE_DAILY_QUESTIONS
@@ -290,7 +328,8 @@ def ask(request: AskRequest, http: Request, authorization: str | None = Header(d
         return response
     try:
         with plans.ai_gate.turn(pro):  # Pro requests are answered first when the AI is busy
-            response, _rows, sql = answer_question(question)
+            history = [t.model_dump() for t in request.history[-HISTORY_TURNS:]]
+            response, rows, sql = answer_question(question, history)
     except psycopg2.Error as e:
         logger.error("Database error: %s", e)
         _log(question, None, f"Database error: {e}", started, "error")
@@ -303,6 +342,7 @@ def ask(request: AskRequest, http: Request, authorization: str | None = Header(d
     text = " ".join([response.response, *response.notes])
     response.log_id = _log(question, sql, text, started, response.kind)
     response.usage = usage
+    response.memory = memory_of(response, rows)
     return response
 
 

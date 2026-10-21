@@ -181,6 +181,8 @@
       align-self: auto;
     }
     .suggestion:hover:not(:disabled) { border-color: var(--brand); background: var(--brand-soft); opacity: 1; }
+    .quick-replies { margin-top: 8px; }
+    .quick-replies .suggestion { font-weight: 600; }
     .saved-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     a.back-btn { text-decoration: none; display: inline-block; border-radius: 12px; font-weight: 600; }
 
@@ -816,6 +818,21 @@
     }
 
     let busy = false;
+    // This chat's recent questions with short summaries of their answers, so follow-ups work.
+    const HISTORY_TURNS = 3;
+    let chatHistory = [];
+
+    function rememberTurn(question, data) {
+      if (!data.memory) return;
+      chatHistory = [...chatHistory, { question, answer: data.memory }].slice(-HISTORY_TURNS);
+    }
+
+    function quickReplies(data) {
+      if (!(data.quick_replies || []).length) return "";
+      return `<div class="suggestions quick-replies">${data.quick_replies.map(r =>
+        `<button type="button" class="suggestion" data-question="${escapeHtml(r.question)}">${escapeHtml(r.label)}</button>`
+      ).join("")}</div>`;
+    }
 
     async function sendQuestion(text) {
       const question = (text ?? questionInput.value).trim();
@@ -838,7 +855,7 @@
             "Content-Type": "application/json",
             ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
           },
-          body: JSON.stringify({ question }),
+          body: JSON.stringify({ question, history: chatHistory }),
         });
         const data = await res.json();
         removeLoading();
@@ -850,6 +867,7 @@
         }
 
         if (data.usage) updateUsage(data.usage.used, data.usage.limit);
+        rememberTurn(question, data);
         if (data.kind === "limit") {
           addMessage("answer", renderLimit(data));
         } else if (data.kind === "result") {
@@ -857,7 +875,7 @@
         } else {
           const extra = data.fallback ? renderFallback(data.fallback) : "";
           addMessage(extra ? "answer" : "ai",
-            `<div class="bubble">${escapeHtml(data.response)}</div>${extra}${feedbackButtons(data.log_id)}`);
+            `<div class="bubble">${escapeHtml(data.response)}</div>${quickReplies(data)}${extra}${feedbackButtons(data.log_id)}`);
         }
       } catch {
         showError("Could not reach the server. Make sure the backend is running.");
@@ -1097,7 +1115,7 @@
       const vote = event.target.closest(".feedback button[data-rating]");
       if (vote) sendFeedback(vote);
       const suggestion = event.target.closest(".suggestion");
-      if (suggestion) sendQuestion(suggestion.textContent);
+      if (suggestion) sendQuestion(suggestion.dataset.question || suggestion.textContent);
     });
     window.addEventListener("hashchange", route);
     window.onSavedClick = showSaved;
@@ -1115,6 +1133,7 @@
     newChatBtn.addEventListener("click", () => {
       if (busy) return;
       messages.replaceChildren(emptyState);
+      chatHistory = [];
       newChatBtn.hidden = true;
       history.replaceState(null, "", location.pathname);
       chat.scrollTo({ top: 0 });
