@@ -136,5 +136,7 @@
   {"id": "src-osu-football", "category": "sources", "question": "How much football revenue did Ohio State report?", "check": "value",
    "truth_sql": "SELECT football_revenue_amount AS value FROM athletics WHERE school_id = 204796"},
   {"id": "src-fastest-job", "category": "sources", "question": "What is the fastest growing occupation?", "check": "value",
-   "truth_sql": "SELECT title AS value FROM occupations WHERE projected_growth_rate IS NOT NULL ORDER BY projected_growth_rate DESC LIMIT 1"}
+   "truth_sql": "SELECT title AS value FROM occupations WHERE projected_growth_rate IS NOT NULL ORDER BY projected_growth_rate DESC LIMIT 1"},
+  {"id": "rank-ca-universities-grad", "category": "ranking", "question": "Top 10 universities in California by graduation rate", "check": "top_n", "n": 10,
+   "truth_sql": "SELECT id, completion_rate AS rank_value FROM schools WHERE year = '2024-25' AND state = 'CA' AND carnegie_class BETWEEN 15 AND 23 AND completion_rate IS NOT NULL ORDER BY completion_rate DESC"}
 ]
