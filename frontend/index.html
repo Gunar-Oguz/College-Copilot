@@ -443,8 +443,173 @@
     button:hover:not(:disabled) { opacity: 0.9; }
     button:disabled { opacity: 0.55; cursor: not-allowed; }
 
+    /* Account controls in the header */
+    .account { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .account[hidden], .account [hidden] { display: none; }
+    .account .new-chat { margin-left: 0; }
+    .header-btn {
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      font-size: 0.8rem;
+      padding: 7px 12px;
+      border-radius: 999px;
+      align-self: center;
+    }
+    .header-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.24); opacity: 1; }
+    .header-btn.primary { background: #fcd34d; border-color: #fcd34d; color: var(--brand-dark); }
+    .header-btn.primary:hover:not(:disabled) { background: #fde68a; }
+    .saved-count {
+      display: inline-block;
+      min-width: 18px;
+      margin-left: 4px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: #fcd34d;
+      color: var(--brand-dark);
+      font-size: 0.72rem;
+      line-height: 18px;
+    }
+    .user-email {
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.78);
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Save (heart) buttons on results */
+    .save-btn {
+      background: none;
+      border: none;
+      padding: 2px 4px;
+      margin-right: 4px;
+      border-radius: 6px;
+      color: #a3a9b8;
+      font-size: 1rem;
+      line-height: 1;
+      vertical-align: -1px;
+      align-self: auto;
+    }
+    .save-btn:hover:not(:disabled) { color: #e11d48; background: #fff1f2; opacity: 1; }
+    .save-btn[aria-pressed="true"] { color: #e11d48; }
+    .save-btn:focus-visible { outline: 2px solid rgba(225, 29, 72, 0.4); }
+    .stats-title { display: flex; align-items: center; gap: 2px; }
+    .bar-row .name .save-btn { font-size: 0.9rem; padding: 0 3px; }
+    .sign-in-hint { font-size: 0.8rem; color: var(--muted); }
+    .link-btn {
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--brand);
+      font-size: inherit;
+      font-weight: 600;
+      text-decoration: underline;
+      align-self: auto;
+    }
+
+    /* Sign-in dialog */
+    dialog.auth {
+      border: none;
+      border-radius: 18px;
+      padding: 0;
+      width: min(400px, calc(100vw - 32px));
+      margin: auto;
+      box-shadow: 0 24px 60px rgba(17, 24, 39, 0.3);
+      color: var(--text);
+    }
+    dialog.auth::backdrop { background: rgba(17, 24, 39, 0.45); }
+    .auth-body { padding: 22px 22px 20px; display: flex; flex-direction: column; gap: 12px; }
+    .auth-head { display: flex; align-items: center; justify-content: space-between; }
+    .auth-head h2 { font-size: 1.15rem; letter-spacing: -0.02em; }
+    .auth-close { background: none; color: var(--muted); padding: 4px 8px; font-size: 1.2rem; align-self: auto; }
+    .auth-reason { font-size: 0.875rem; color: var(--muted); }
+    .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: 10px; padding: 3px; }
+    .auth-tabs button { background: none; color: var(--muted); padding: 8px; font-size: 0.875rem; border-radius: 8px; align-self: auto; }
+    .auth-tabs button[aria-selected="true"] { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(17, 24, 39, 0.1); }
+    .auth form { display: flex; flex-direction: column; gap: 10px; }
+    .auth label { font-size: 0.8rem; font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
+    .auth input {
+      font: inherit;
+      font-size: 16px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .auth input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(59, 63, 216, 0.15); }
+    .auth form button[type="submit"] { align-self: stretch; margin-top: 2px; }
+    .auth-divider { display: flex; align-items: center; gap: 10px; font-size: 0.75rem; color: var(--muted); }
+    .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+    .google-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--border);
+      align-self: stretch;
+    }
+    .google-btn:hover:not(:disabled) { background: var(--surface-2); opacity: 1; }
+    .auth-message { font-size: 0.85rem; border-radius: 10px; padding: 9px 12px; }
+    .auth-message.error { background: #fef2f2; color: #991b1b; }
+    .auth-message.info { background: #ecfdf5; color: #065f46; }
+
+    /* My Saved Schools */
+    #saved-view { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+    #saved-view[hidden], #messages[hidden] { display: none; }
+    .saved-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .saved-head h2 { font-size: 1.35rem; letter-spacing: -0.02em; }
+    .back-btn { background: var(--surface); color: var(--text); border: 1px solid var(--border); font-size: 0.85rem; padding: 8px 14px; align-self: auto; }
+    .saved-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+    .saved-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .saved-card h3 { font-size: 1.05rem; letter-spacing: -0.01em; }
+    .saved-card .place { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+    .remove-btn { background: #fff1f2; color: #be123c; font-size: 0.8rem; padding: 7px 12px; align-self: auto; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { background: var(--surface-2); border-radius: 10px; padding: 7px 10px; font-size: 0.8rem; }
+    .chip b { display: block; font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+    .notes { display: flex; flex-direction: column; gap: 8px; }
+    .notes-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    .note { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 9px 12px; font-size: 0.9rem; }
+    .note-text { white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+    .note-meta { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 0.75rem; color: var(--muted); }
+    .note-meta button, .note-edit-actions button { background: none; color: var(--brand); padding: 0; font-size: 0.78rem; align-self: auto; }
+    .note-meta button.danger { color: #be123c; }
+    .note textarea, .note-form textarea { width: 100%; min-height: 64px; font-size: 16px; }
+    .note-edit-actions { display: flex; gap: 14px; margin-top: 6px; }
+    .note-form { display: flex; gap: 8px; align-items: flex-end; }
+    .note-form textarea { flex: 1; min-height: 44px; }
+    .note-form button { padding: 10px 14px; font-size: 0.85rem; }
+    .saved-empty { text-align: center; color: var(--muted); padding: 40px 12px; line-height: 1.6; }
+    body.signed-in .sign-in-hint { display: none; }
+    body.saved-page footer { display: none; }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 96px;
+      transform: translateX(-50%);
+      background: #111827;
+      color: #fff;
+      font-size: 0.85rem;
+      padding: 10px 16px;
+      border-radius: 999px;
+      z-index: 300;
+      box-shadow: 0 8px 24px rgba(17, 24, 39, 0.25);
+      max-width: calc(100vw - 32px);
+    }
+
     @media (max-width: 640px) {
       header { padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); }
+      .user-email, .header-btn.signup, .btn-label { display: none; }
+      .new-chat { padding: 6px 11px; font-size: 0.9rem; }
+      .account { gap: 6px; }
+      header h1 { font-size: 1rem; }
+      .header-btn { padding: 6px 10px; }
+      .saved-card { padding: 14px 12px; }
+      .note-form { flex-direction: column; align-items: stretch; }
       .logo { width: 34px; height: 34px; }
       header h1 { font-size: 1.05rem; }
       header p { display: none; }
@@ -488,7 +653,18 @@
         <h1>College<span class="accent">Copilot</span></h1>
         <p>Answers about U.S. colleges, straight from public data</p>
       </div>
-      <button type="button" class="new-chat" id="new-chat" hidden>New chat</button>
+      <div class="account">
+        <button type="button" class="new-chat" id="new-chat" aria-label="New chat" hidden>+<span class="btn-label"> New chat</span></button>
+        <div id="signed-out" class="account" hidden>
+          <button type="button" class="header-btn" data-auth="signin">Sign in</button>
+          <button type="button" class="header-btn primary signup" data-auth="signup">Sign up</button>
+        </div>
+        <div id="signed-in" class="account" hidden>
+          <button type="button" class="header-btn" id="saved-btn" aria-label="My saved schools">♥<span class="btn-label"> Saved</span><span class="saved-count" id="saved-count">0</span></button>
+          <span class="user-email" id="user-email"></span>
+          <button type="button" class="header-btn" id="sign-out">Sign out</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -509,7 +685,33 @@
         <p class="sources-line">Data from College Scorecard, IPEDS, Opportunity Insights, BLS, Census and more.</p>
       </div>
     </div>
+    <section id="saved-view" hidden aria-labelledby="saved-title"></section>
   </main>
+
+  <dialog class="auth" id="auth-dialog" aria-labelledby="auth-title">
+    <div class="auth-body">
+      <div class="auth-head">
+        <h2 id="auth-title">Welcome to CollegeCopilot</h2>
+        <button type="button" class="auth-close" id="auth-close" aria-label="Close">×</button>
+      </div>
+      <p class="auth-reason" id="auth-reason">Sign in to save schools and keep notes on them.</p>
+      <div class="auth-tabs" role="tablist">
+        <button type="button" role="tab" id="tab-signin" aria-selected="true">Sign in</button>
+        <button type="button" role="tab" id="tab-signup" aria-selected="false">Create account</button>
+      </div>
+      <form id="auth-form" novalidate>
+        <label>Email <input type="email" id="auth-email" autocomplete="email" required></label>
+        <label>Password <input type="password" id="auth-password" autocomplete="current-password" minlength="6" required></label>
+        <button type="submit" id="auth-submit">Sign in</button>
+      </form>
+      <div class="auth-divider">or</div>
+      <button type="button" class="google-btn" id="google-btn">
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+        Continue with Google
+      </button>
+      <div class="auth-message" id="auth-message" role="alert" hidden></div>
+    </div>
+  </dialog>
 
   <footer>
     <div class="input-row">
@@ -518,6 +720,7 @@
     </div>
   </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
   <script>
     const API_URL = "/ask";
     const chat = document.getElementById("chat");
@@ -526,6 +729,18 @@
     const questionInput = document.getElementById("question");
     const sendBtn = document.getElementById("send-btn");
     const newChatBtn = document.getElementById("new-chat");
+    const footer = document.querySelector("footer");
+    const savedView = document.getElementById("saved-view");
+    const authDialog = document.getElementById("auth-dialog");
+    const authForm = document.getElementById("auth-form");
+    const authMessage = document.getElementById("auth-message");
+
+    let sb = null;            // Supabase client, once /config says sign-in is set up
+    let session = null;       // current Supabase session
+    let authReady = false;    // sign-in is available on this server
+    let googleEnabled = false;
+    let authMode = "signin";
+    const favorites = new Set();
 
     function escapeHtml(text) {
       return String(text)
@@ -533,6 +748,14 @@
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
+    }
+
+    // Heart button for a school; its state comes from the signed-in user's favorites.
+    function saveButton(schoolId, name) {
+      if (!schoolId || !authReady) return "";
+      const saved = favorites.has(schoolId);
+      return `<button type="button" class="save-btn" data-school-id="${schoolId}"
+        aria-pressed="${saved}" aria-label="Save ${escapeHtml(name)}" title="Save school">${saved ? "♥" : "♡"}</button>`;
     }
 
     function renderStats(block) {
@@ -543,7 +766,9 @@
           <div class="value ${missing ? "missing" : ""}">${escapeHtml(item.display)}</div>
         </div>`;
       }).join("");
-      const title = block.title ? `<div class="block-title">${escapeHtml(block.title)}</div>` : "";
+      const title = block.title
+        ? `<div class="block-title stats-title">${saveButton(block.school_id, block.title)}${escapeHtml(block.title)}</div>`
+        : "";
       return `<section>${title}<div class="stats">${tiles}</div></section>`;
     }
 
@@ -552,7 +777,7 @@
         const pct = Math.max(0, (item.value / block.max) * 100);
         const tip = `${item.label}: ${item.display}`;
         return `<div class="bar-row" title="${escapeHtml(tip)}">
-          <span class="name">${escapeHtml(item.label)}</span>
+          <span class="name">${saveButton(item.school_id, item.label)}${escapeHtml(item.label)}</span>
           <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
           <span class="num">${escapeHtml(item.display)}</span>
         </div>`;
@@ -564,7 +789,9 @@
     }
 
     function renderCompare(block) {
-      const head = `<tr><th></th>${block.schools.map(s => `<th>${escapeHtml(s)}</th>`).join("")}</tr>`;
+      const ids = block.school_ids || [];
+      const head = `<tr><th></th>${block.schools.map((s, i) =>
+        `<th>${saveButton(ids[i], s)}${escapeHtml(s)}</th>`).join("")}</tr>`;
       const body = block.rows.map(row => `<tr>
         <td>${escapeHtml(row.label)}</td>
         ${row.cells.map(cell => {
@@ -587,7 +814,8 @@
           const col = block.columns[i];
           const missing = cell === "Not reported";
           const tag = row.reference && i === 0 ? `<span class="tag ref">Your school</span>` : "";
-          return `<td class="${col.numeric ? "num" : ""} ${missing ? "missing" : ""}">${escapeHtml(cell)}${tag}</td>`;
+          const heart = i === 0 ? saveButton(row.school_id, cell) : "";
+          return `<td class="${col.numeric ? "num" : ""} ${missing ? "missing" : ""}">${heart}${escapeHtml(cell)}${tag}</td>`;
         }).join("")}
       </tr>`).join("");
       return `<section><div class="table-wrap"><table><thead>${head}</thead><tbody>${body}</tbody></table></div></section>`;
@@ -598,9 +826,14 @@
     function renderAnswer(data) {
       const blocks = (data.blocks || []).map(b => (RENDERERS[b.type] || (() => ""))(b)).join("");
       const source = data.source ? `<div class="source">Source: ${escapeHtml(data.source)}</div>` : "";
+      const hasSchools = blocks.includes("save-btn");
+      const hint = hasSchools && authReady
+        ? `<p class="sign-in-hint">♡ <button type="button" class="link-btn" data-auth="signin">Sign in</button> to save schools</p>`
+        : "";
       return `<div class="card">
         <p class="summary">${escapeHtml(data.response)}</p>
         ${blocks}
+        ${hint}
         ${source}
       </div>`;
     }
@@ -667,6 +900,7 @@
       if (!question) { questionInput.focus(); return; }
 
       busy = true;
+      if (location.hash === "#saved") location.hash = "";
       newChatBtn.hidden = false;
       addMessage("user", `<div class="bubble">${escapeHtml(question)}</div>`);
       questionInput.value = "";
@@ -704,6 +938,347 @@
       }
     }
 
+    // ---------- Accounts (Supabase Auth) ----------
+
+    function showToast(message) {
+      const toast = document.createElement("div");
+      toast.className = "toast";
+      toast.setAttribute("role", "status");
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2600);
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token || ""}`,
+          ...(options.headers || {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        openAuth("signin", "Your session expired. Please sign in again.");
+        throw new Error("signed out");
+      }
+      if (!res.ok) throw new Error(data.detail || "Something went wrong");
+      return data;
+    }
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      const signup = mode === "signup";
+      document.getElementById("tab-signin").setAttribute("aria-selected", String(!signup));
+      document.getElementById("tab-signup").setAttribute("aria-selected", String(signup));
+      document.getElementById("auth-submit").textContent = signup ? "Create account" : "Sign in";
+      document.getElementById("auth-password").autocomplete = signup ? "new-password" : "current-password";
+      setAuthMessage("");
+    }
+
+    function setAuthMessage(text, kind = "error") {
+      authMessage.hidden = !text;
+      authMessage.textContent = text;
+      authMessage.className = `auth-message ${kind}`;
+    }
+
+    function openAuth(mode = "signin", reason = "Sign in to save schools and keep notes on them.") {
+      if (!authReady) return;
+      setAuthMode(mode);
+      document.getElementById("auth-reason").textContent = reason;
+      if (!authDialog.open) authDialog.showModal();
+      document.getElementById("auth-email").focus();
+    }
+
+    function updateAuthUI() {
+      const signedIn = Boolean(session);
+      document.body.classList.toggle("signed-in", signedIn);
+      document.getElementById("signed-out").hidden = !authReady || signedIn;
+      document.getElementById("signed-in").hidden = !signedIn;
+      document.getElementById("user-email").textContent = session?.user?.email || "";
+    }
+
+    function refreshHearts() {
+      document.querySelectorAll(".save-btn").forEach(btn => {
+        const saved = favorites.has(Number(btn.dataset.schoolId));
+        btn.setAttribute("aria-pressed", String(saved));
+        btn.textContent = saved ? "♥" : "♡";
+      });
+      document.getElementById("saved-count").textContent = favorites.size;
+    }
+
+    async function loadFavoriteIds() {
+      try {
+        const data = await api("/me/favorite-ids");
+        favorites.clear();
+        data.ids.forEach(id => favorites.add(id));
+      } catch { /* api() already asked the user to sign in again */ }
+      refreshHearts();
+    }
+
+    async function toggleSave(schoolId) {
+      if (!session) {
+        openAuth("signin", "Sign in to save schools.");
+        return;
+      }
+      const wasSaved = favorites.has(schoolId);
+      wasSaved ? favorites.delete(schoolId) : favorites.add(schoolId);
+      refreshHearts();
+      try {
+        await api(`/me/favorites/${schoolId}`, { method: wasSaved ? "DELETE" : "PUT" });
+        showToast(wasSaved ? "Removed from saved schools" : "Saved to your schools");
+      } catch (err) {
+        wasSaved ? favorites.add(schoolId) : favorites.delete(schoolId);
+        refreshHearts();
+        if (err.message !== "signed out") showToast(err.message);
+      }
+    }
+
+    async function submitAuth(event) {
+      event.preventDefault();
+      const email = document.getElementById("auth-email").value.trim();
+      const password = document.getElementById("auth-password").value;
+      if (!email || password.length < 6) {
+        setAuthMessage("Enter your email and a password of at least 6 characters.");
+        return;
+      }
+      const submit = document.getElementById("auth-submit");
+      submit.disabled = true;
+      try {
+        if (authMode === "signup") {
+          const { data, error } = await sb.auth.signUp({
+            email, password, options: { emailRedirectTo: location.origin + location.pathname },
+          });
+          if (error) throw error;
+          if (!data.session) {
+            setAuthMessage(`Check ${email} for a link to confirm your account, then sign in.`, "info");
+          }
+        } else {
+          const { error } = await sb.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+        }
+      } catch (err) {
+        setAuthMessage(err.message || "Could not sign in.");
+      } finally {
+        submit.disabled = false;
+      }
+    }
+
+    async function signInWithGoogle() {
+      if (!googleEnabled) {
+        setAuthMessage("Google sign-in isn't turned on yet. Please use email for now.");
+        return;
+      }
+      const { error } = await sb.auth.signInWithOAuth({
+        provider: "google", options: { redirectTo: location.origin + location.pathname },
+      });
+      if (error) setAuthMessage(error.message);
+    }
+
+    async function initAuth() {
+      try {
+        const config = (await (await fetch("/config")).json()).supabase || {};
+        if (!config.url || !config.anon_key || !window.supabase) return;
+        sb = window.supabase.createClient(config.url, config.anon_key, {
+          auth: { flowType: "pkce", persistSession: true, detectSessionInUrl: true },
+        });
+        authReady = true;
+        fetch(`${config.url}/auth/v1/settings`, { headers: { apikey: config.anon_key } })
+          .then(r => r.json()).then(s => { googleEnabled = Boolean(s.external?.google); }).catch(() => {});
+        sb.auth.onAuthStateChange((event, newSession) => {
+          session = newSession;
+          updateAuthUI();
+          // Supabase advises not to await other calls inside this callback.
+          setTimeout(() => {
+            if (session) {
+              loadFavoriteIds();
+              if (event === "SIGNED_IN" && authDialog.open) authDialog.close();
+            } else {
+              favorites.clear();
+              refreshHearts();
+              if (location.hash === "#saved") location.hash = "";
+            }
+            route();
+          }, 0);
+        });
+      } catch {
+        authReady = false;
+      }
+      updateAuthUI();
+    }
+
+    // ---------- My Saved Schools ----------
+
+    const fmt = {
+      pct: v => (v == null ? "—" : `${(Number(v) * 100).toFixed(1)}%`),
+      money: v => (v == null ? "—" : `$${Math.round(Number(v)).toLocaleString()}`),
+      int: v => (v == null ? "—" : Math.round(Number(v)).toLocaleString()),
+      date: v => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+    };
+
+    function renderNote(note) {
+      return `<div class="note" data-note-id="${note.id}">
+        <div class="note-text">${escapeHtml(note.note_text)}</div>
+        <div class="note-meta">
+          <span>${fmt.date(note.created_at)}</span>
+          <button type="button" data-action="edit-note">Edit</button>
+          <button type="button" class="danger" data-action="delete-note">Delete</button>
+        </div>
+      </div>`;
+    }
+
+    function renderSavedCard(school) {
+      const chips = [
+        ["Acceptance rate", fmt.pct(school.admission_rate)],
+        ["Average net price", fmt.money(school.cost_avg_net_price)],
+        ["Graduation rate", fmt.pct(school.completion_rate)],
+        ["Median earnings", fmt.money(school.earnings_median_10yr)],
+        ["Students", fmt.int(school.student_size)],
+      ].map(([label, value]) => `<div class="chip">${label}<b>${value}</b></div>`).join("");
+      const place = [school.city, school.state].filter(Boolean).join(", ");
+      return `<article class="saved-card" data-school-id="${school.school_id}">
+        <div class="saved-card-head">
+          <div>
+            <h3>${escapeHtml(school.name || `School ${school.school_id}`)}</h3>
+            <div class="place">${escapeHtml(place)}</div>
+          </div>
+          <button type="button" class="remove-btn" data-action="remove">♥ Remove</button>
+        </div>
+        <div class="chips">${chips}</div>
+        <div class="notes">
+          <div class="notes-title">My notes</div>
+          ${school.notes.map(renderNote).join("")}
+          <form class="note-form" data-action="add-note">
+            <textarea placeholder="Add a note, e.g. visit in April, ask about scholarships..." aria-label="New note" maxlength="5000"></textarea>
+            <button type="submit">Add note</button>
+          </form>
+        </div>
+      </article>`;
+    }
+
+    async function showSaved() {
+      if (!session) {
+        openAuth("signin", "Sign in to see your saved schools.");
+        location.hash = "";
+        return;
+      }
+      messages.hidden = true;
+      savedView.hidden = false;
+      document.body.classList.add("saved-page");
+      newChatBtn.hidden = true;
+      savedView.innerHTML = `<div class="saved-head"><h2 id="saved-title">My Saved Schools</h2>
+        <button type="button" class="back-btn" data-action="back">← Back to search</button></div>
+        <div class="loading-bubble"><span class="dots"><span></span><span></span><span></span></span> Loading your schools...</div>`;
+      chat.scrollTo({ top: 0 });
+      try {
+        const { favorites: list } = await api("/me/favorites");
+        favorites.clear();
+        list.forEach(s => favorites.add(s.school_id));
+        refreshHearts();
+        const body = list.length
+          ? list.map(renderSavedCard).join("")
+          : `<div class="saved-empty">No saved schools yet.<br>Tap ♡ next to any school in your results to save it here.</div>`;
+        savedView.innerHTML = savedView.querySelector(".saved-head").outerHTML + body;
+      } catch (err) {
+        if (err.message !== "signed out") savedView.querySelector(".loading-bubble").textContent = err.message;
+      }
+    }
+
+    function showChat() {
+      messages.hidden = false;
+      savedView.hidden = true;
+      document.body.classList.remove("saved-page");
+      newChatBtn.hidden = !messages.querySelector(".message");
+    }
+
+    function route() {
+      if (location.hash === "#saved") showSaved();
+      else showChat();
+    }
+
+    async function handleSavedClick(event) {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const card = button.closest(".saved-card");
+      const noteEl = button.closest(".note");
+      const action = button.dataset.action;
+      try {
+        if (action === "back") {
+          location.hash = "";
+        } else if (action === "remove") {
+          const id = Number(card.dataset.schoolId);
+          await api(`/me/favorites/${id}`, { method: "DELETE" });
+          favorites.delete(id);
+          refreshHearts();
+          card.remove();
+          if (!savedView.querySelector(".saved-card")) showSaved();
+        } else if (action === "edit-note") {
+          const text = noteEl.querySelector(".note-text").textContent;
+          noteEl.innerHTML = `<textarea aria-label="Edit note" maxlength="5000">${escapeHtml(text)}</textarea>
+            <div class="note-edit-actions"><button type="button" data-action="save-note">Save</button>
+            <button type="button" data-action="cancel-note">Cancel</button></div>`;
+          noteEl.dataset.original = text;
+          noteEl.querySelector("textarea").focus();
+        } else if (action === "save-note") {
+          const text = noteEl.querySelector("textarea").value.trim();
+          if (!text) { showToast("Note cannot be empty"); return; }
+          const note = await api(`/me/notes/${noteEl.dataset.noteId}`, {
+            method: "PUT", body: JSON.stringify({ note_text: text }),
+          });
+          noteEl.outerHTML = renderNote(note);
+        } else if (action === "cancel-note") {
+          showSaved();
+        } else if (action === "delete-note") {
+          await api(`/me/notes/${noteEl.dataset.noteId}`, { method: "DELETE" });
+          noteEl.remove();
+        }
+      } catch (err) {
+        if (err.message !== "signed out") showToast(err.message);
+      }
+    }
+
+    async function handleAddNote(event) {
+      const form = event.target.closest("form[data-action='add-note']");
+      if (!form) return;
+      event.preventDefault();
+      const textarea = form.querySelector("textarea");
+      const text = textarea.value.trim();
+      if (!text) { textarea.focus(); return; }
+      const id = form.closest(".saved-card").dataset.schoolId;
+      try {
+        const note = await api(`/me/favorites/${id}/notes`, { method: "POST", body: JSON.stringify({ note_text: text }) });
+        form.insertAdjacentHTML("beforebegin", renderNote(note));
+        textarea.value = "";
+      } catch (err) {
+        if (err.message !== "signed out") showToast(err.message);
+      }
+    }
+
+    savedView.addEventListener("click", handleSavedClick);
+    savedView.addEventListener("submit", handleAddNote);
+    messages.addEventListener("click", event => {
+      const heart = event.target.closest(".save-btn");
+      if (heart) toggleSave(Number(heart.dataset.schoolId));
+    });
+    document.addEventListener("click", event => {
+      const trigger = event.target.closest("[data-auth]");
+      if (trigger) openAuth(trigger.dataset.auth === "signup" ? "signup" : "signin",
+        trigger.closest(".sign-in-hint") ? "Sign in to save schools." : undefined);
+    });
+    document.getElementById("tab-signin").addEventListener("click", () => setAuthMode("signin"));
+    document.getElementById("tab-signup").addEventListener("click", () => setAuthMode("signup"));
+    document.getElementById("auth-close").addEventListener("click", () => authDialog.close());
+    authDialog.addEventListener("click", event => { if (event.target === authDialog) authDialog.close(); });
+    authForm.addEventListener("submit", submitAuth);
+    document.getElementById("google-btn").addEventListener("click", signInWithGoogle);
+    document.getElementById("sign-out").addEventListener("click", () => sb?.auth.signOut());
+    document.getElementById("saved-btn").addEventListener("click", () => {
+      if (location.hash === "#saved") showSaved();
+      else location.hash = "saved";
+    });
+    window.addEventListener("hashchange", route);
+
     sendBtn.addEventListener("click", () => sendQuestion());
 
     document.querySelectorAll(".examples button").forEach(btn =>
@@ -724,8 +1299,9 @@
       }
     });
 
+    // Wait for sign-in setup so a shared question's results get Save buttons.
     const sharedQuestion = new URLSearchParams(location.search).get("q");
-    if (sharedQuestion) sendQuestion(sharedQuestion);
+    initAuth().finally(() => { if (sharedQuestion) sendQuestion(sharedQuestion); });
 
     questionInput.addEventListener("input", () => {
       questionInput.style.height = "auto";

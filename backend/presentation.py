@@ -137,6 +137,12 @@ def _metric_columns(rows: list[dict], columns: list[str]) -> list[str]:
     return metrics
 
 
+def _school_id(row: dict) -> int | None:
+    """The school a row describes (for the Save button), or None for non-school rows."""
+    value = row.get("id", row.get("school_id"))
+    return value if isinstance(value, int) and row.get("name") else None
+
+
 def _label_for_row(row: dict) -> str:
     return str(row.get("name") or row.get("program_name") or row.get("title") or row.get("state") or "Result")
 
@@ -148,7 +154,7 @@ def _stats_block(row: dict, columns: list[str]) -> dict:
             continue
         label, fmt, _ = column_meta(key, row.get(key))
         items.append({"label": label, "display": format_value(row.get(key), fmt)})
-    return {"type": "stats", "title": row.get("name"), "items": items}
+    return {"type": "stats", "title": row.get("name"), "school_id": _school_id(row), "items": items}
 
 
 def _bars_block(rows: list[dict], metric: str) -> dict | None:
@@ -164,7 +170,8 @@ def _bars_block(rows: list[dict], metric: str) -> dict | None:
         "title": label,
         "max": max(numbers) or 1,
         "items": [
-            {"label": _label_for_row(r), "value": _to_float(r[metric]), "display": format_value(r[metric], fmt)}
+            {"label": _label_for_row(r), "school_id": _school_id(r), "value": _to_float(r[metric]),
+             "display": format_value(r[metric], fmt)}
             for r in values
         ],
     }
@@ -187,7 +194,12 @@ def _compare_block(rows: list[dict], metrics: list[str]) -> dict:
                 for r, n in zip(rows, numbers)
             ],
         })
-    return {"type": "compare", "schools": [_label_for_row(r) for r in rows], "rows": out_rows}
+    return {
+        "type": "compare",
+        "schools": [_label_for_row(r) for r in rows],
+        "school_ids": [_school_id(r) for r in rows],
+        "rows": out_rows,
+    }
 
 
 def _table_block(rows: list[dict], columns: list[str]) -> dict:
@@ -202,6 +214,7 @@ def _table_block(rows: list[dict], columns: list[str]) -> dict:
         "rows": [
             {
                 "reference": r.get("role") == "reference",
+                "school_id": _school_id(r),
                 "cells": [format_value(r.get(key), fmt) for key, _, fmt, _ in metas],
             }
             for r in rows

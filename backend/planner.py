@@ -7,6 +7,7 @@ clarification, or says it cannot answer).
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 
 import anthropic
@@ -18,6 +19,24 @@ from school_lookup import resolve_school
 from similar_schools import find_similar_schools
 
 MAX_TOOL_ROUNDS = 8
+
+# Added to the question only when it asks for universities, so the planner never applies the
+# filter to "schools" or "colleges" (it would otherwise second-guess rankings with trade schools).
+UNIVERSITY_RE = re.compile(r"\buniversit(y|ies)\b|\bfour[- ]year\b|\b4[- ]year\b", re.IGNORECASE)
+SCHOOLS_MEASURE_RE = re.compile(
+    r"graduat|complet|retention|admi(ssion|t)|accept|selective|cost|price|tuition|afford|cheap|expensive|"
+    r"earning|salar|debt|largest|biggest|smallest|enrollment|students|size", re.IGNORECASE)
+UNIVERSITY_HINT = (
+    "This question asks about universities or four-year colleges: when listing or ranking schools, add "
+    "schools.carnegie_class BETWEEN 15 AND 23 (doctoral, master's and baccalaureate institutions)."
+)
+
+
+def question_hints(question: str) -> str:
+    """Instructions that depend on the question's wording, decided in code for consistency."""
+    if UNIVERSITY_RE.search(question) and SCHOOLS_MEASURE_RE.search(question):
+        return UNIVERSITY_HINT
+    return ""
 PREVIEW_ROWS = 20
 
 INCOME_BRACKETS = [
@@ -32,8 +51,6 @@ COLUMN_NOTES = """
 - schools has one row per (id, year). id is the IPEDS UNITID. Names are NOT unique.
 - Rates (admission_rate, completion_rate, retention_rate, pell_grant_rate, etc.) are decimals 0-1, e.g. 0.25 = 25%.
 - ownership: 1 = public, 2 = private nonprofit, 3 = private for-profit.
-- When the question says "universities" or "four-year colleges", add schools.carnegie_class BETWEEN 15
-  AND 23 (doctoral, master's and baccalaureate institutions). Plain "schools" or "colleges" means all.
 - cost_avg_net_price is average annual net price. cost_net_price_income_* are net price by family
   income bracket; always get the right column from net_price_column.
 - earnings_median_10yr is median earnings 10 years after entry, in dollars.
@@ -206,6 +223,8 @@ RULES:
   (25 miles if none is given; skip it only for "the N closest"). Sort by distance unless asked
   otherwise.
 - In run_query: filter schools.year = '{latest_year}' unless the question asks about other years;
+  add only the filters the question asks for (no minimum size or extra conditions), and submit that
+  result even if surprising schools (trade, beauty, adult schools) rank high;
   select schools.id and schools.name plus every column used to filter or sort; exclude NULLs in
   filtered or sorted columns; add LIMIT 50 unless a number or count is asked for.
 - If a named school can't be found or the data can't answer the question, submit cannot_answer.
@@ -272,7 +291,10 @@ def plan_answer(question: str) -> Answer:
         "text": build_prompt(get_schema(), get_latest_year()),
         "cache_control": {"type": "ephemeral"},
     }]
-    messages = [{"role": "user", "content": f'QUESTION: "{question}"'}]
+    content = f'QUESTION: "{question}"'
+    if hints := question_hints(question):
+        content += f"\n\n{hints}"
+    messages = [{"role": "user", "content": content}]
     for _ in range(MAX_TOOL_ROUNDS):
         message = _get_client().messages.create(
             model=os.getenv("CLAUDE_MODEL", "claude-haiku-4-5"),

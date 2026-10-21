@@ -2,12 +2,13 @@ import json
 import logging
 import os
 import re
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import anthropic
 import psycopg2
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -15,6 +16,7 @@ from pydantic import BaseModel
 from database import execute_sql, get_data_sources, get_latest_year
 from planner import plan_answer
 from presentation import build_blocks, unsupported_numbers
+import user_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,7 +28,16 @@ FRONTEND_DIR = ROOT_DIR / "frontend"
 load_dotenv(BASE_DIR / ".env")
 load_dotenv(ROOT_DIR / ".env")
 
-app = FastAPI(title="CollegeCopilot")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        user_data.ensure_user_tables()
+    except psycopg2.Error as e:
+        logger.error("Could not create user tables: %s", e)
+    yield
+
+
+app = FastAPI(title="CollegeCopilot", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -171,6 +182,82 @@ def ask(request: AskRequest):
     except anthropic.APIError as e:
         logger.error("Claude API error: %s", e)
         raise HTTPException(status_code=502, detail="AI service error, please try again")
+
+
+class NoteRequest(BaseModel):
+    note_text: str
+
+
+def _user_id(authorization: str | None) -> str:
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    try:
+        return user_data.get_user(token)["id"]
+    except user_data.AuthError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+
+def _note_text(request: NoteRequest) -> str:
+    text = request.note_text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Note cannot be empty")
+    if len(text) > 5000:
+        raise HTTPException(status_code=400, detail="Note is too long (5,000 characters max)")
+    return text
+
+
+@app.get("/config")
+def config():
+    """Public Supabase settings for the browser (the anon key is meant to be public)."""
+    return {"supabase": user_data.supabase_config()}
+
+
+@app.get("/me/favorites")
+def my_favorites(authorization: str | None = Header(default=None)):
+    user_id = _user_id(authorization)
+    return {"favorites": user_data.list_favorites(user_id)}
+
+
+@app.get("/me/favorite-ids")
+def my_favorite_ids(authorization: str | None = Header(default=None)):
+    return {"ids": user_data.list_favorite_ids(_user_id(authorization))}
+
+
+@app.put("/me/favorites/{unitid}")
+def save_favorite(unitid: int, authorization: str | None = Header(default=None)):
+    user_id = _user_id(authorization)
+    if not execute_sql("SELECT 1 FROM schools WHERE id = %s LIMIT 1", (unitid,)):
+        raise HTTPException(status_code=404, detail="School not found")
+    user_data.add_favorite(user_id, unitid)
+    return {"saved": True}
+
+
+@app.delete("/me/favorites/{unitid}")
+def unsave_favorite(unitid: int, authorization: str | None = Header(default=None)):
+    user_data.remove_favorite(_user_id(authorization), unitid)
+    return {"saved": False}
+
+
+@app.post("/me/favorites/{unitid}/notes")
+def create_note(unitid: int, request: NoteRequest, authorization: str | None = Header(default=None)):
+    user_id = _user_id(authorization)
+    if unitid not in user_data.list_favorite_ids(user_id):
+        raise HTTPException(status_code=400, detail="Save the school before adding notes")
+    return user_data.add_note(user_id, unitid, _note_text(request))
+
+
+@app.put("/me/notes/{note_id}")
+def edit_note(note_id: int, request: NoteRequest, authorization: str | None = Header(default=None)):
+    note = user_data.update_note(_user_id(authorization), note_id, _note_text(request))
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return note
+
+
+@app.delete("/me/notes/{note_id}")
+def remove_note(note_id: int, authorization: str | None = Header(default=None)):
+    if not user_data.delete_note(_user_id(authorization), note_id):
+        raise HTTPException(status_code=404, detail="Note not found")
+    return {"deleted": True}
 
 
 @app.get("/")
