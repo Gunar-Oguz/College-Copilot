@@ -111,15 +111,59 @@ function openAuth(mode = "signin", reason = "Sign in to save schools and keep no
   document.getElementById("auth-email").focus();
 }
 
+// Account button in the header: the user's Google photo (or their initial) opens a small menu.
+function ensureAccountMenu(box) {
+  if (document.getElementById("avatar-btn")) return;
+  box.insertAdjacentHTML("beforeend", `
+    <div class="user-menu-wrap">
+      <button type="button" class="avatar-btn" id="avatar-btn" aria-haspopup="menu" aria-expanded="false"
+              aria-controls="user-menu" aria-label="Account menu"></button>
+      <div class="user-menu" id="user-menu" role="menu" hidden>
+        <div class="user-menu-name" id="user-menu-name"></div>
+        <div class="user-menu-email" id="user-menu-email"></div>
+        <button type="button" role="menuitem" id="menu-sign-out">Sign out</button>
+      </div>
+    </div>`);
+  const button = document.getElementById("avatar-btn");
+  const menu = document.getElementById("user-menu");
+  const setOpen = open => { menu.hidden = !open; button.setAttribute("aria-expanded", String(open)); };
+  button.addEventListener("click", () => setOpen(menu.hidden));
+  document.addEventListener("click", event => { if (!event.target.closest(".user-menu-wrap")) setOpen(false); });
+  document.addEventListener("keydown", event => { if (event.key === "Escape") setOpen(false); });
+  document.getElementById("menu-sign-out").addEventListener("click", () => { setOpen(false); sb?.auth.signOut(); });
+}
+
+function profileOf(user) {
+  const meta = user?.user_metadata || {};
+  const picture = meta.avatar_url || meta.picture || "";
+  return {
+    name: meta.full_name || meta.name || "",
+    email: user?.email || "",
+    picture: /^https:\/\//.test(picture) ? picture : "",
+  };
+}
+
 function updateAuthUI() {
   const signedIn = Boolean(session);
   document.body.classList.toggle("signed-in", signedIn);
   const signedOut = document.getElementById("signed-out");
   const signedInBox = document.getElementById("signed-in");
-  const email = document.getElementById("user-email");
   if (signedOut) signedOut.hidden = !authReady || signedIn;
-  if (signedInBox) signedInBox.hidden = !signedIn;
-  if (email) email.textContent = session?.user?.email || "";
+  if (!signedInBox) return;
+  signedInBox.hidden = !signedIn;
+  if (!signedIn) return;
+  ensureAccountMenu(signedInBox);
+  const user = profileOf(session.user);
+  const initial = (user.name || user.email || "?").trim().charAt(0).toUpperCase();
+  const avatar = document.getElementById("avatar-btn");
+  avatar.innerHTML = user.picture
+    ? `<img src="${escapeHtml(user.picture)}" alt="" referrerpolicy="no-referrer">`
+    : `<span>${escapeHtml(initial)}</span>`;
+  avatar.querySelector("img")?.addEventListener("error", () => {
+    avatar.innerHTML = `<span>${escapeHtml(initial)}</span>`;  // photo failed to load
+  });
+  document.getElementById("user-menu-name").textContent = user.name;
+  document.getElementById("user-menu-email").textContent = user.email;
 }
 
 function refreshHearts() {
@@ -190,17 +234,39 @@ async function submitAuth(event) {
 }
 
 async function signInWithGoogle() {
+  await authSettings;  // whether Google is turned on in Supabase
   if (!googleEnabled) {
     setAuthMessage("Google sign-in isn't turned on yet. Please use email for now.");
     return;
   }
+  const button = document.getElementById("google-btn");
+  button.disabled = true;
   const { error } = await sb.auth.signInWithOAuth({
-    provider: "google", options: { redirectTo: location.origin + location.pathname },
+    provider: "google", options: { redirectTo: `${location.origin}/` },  // back to the homepage
   });
-  if (error) setAuthMessage(error.message);
+  if (error) {
+    button.disabled = false;
+    setAuthMessage(error.message);
+  }
 }
 
+// A failed or cancelled Google sign-in comes back with ?error_description=... in the URL.
+function takeAuthErrorFromUrl() {
+  const query = new URLSearchParams(location.search);
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const message = query.get("error_description") || hash.get("error_description");
+  if (!message) return null;
+  for (const key of ["error", "error_code", "error_description"]) query.delete(key);
+  const rest = query.toString();
+  history.replaceState(history.state, "", location.pathname + (rest ? `?${rest}` : ""));
+  return message;
+}
+
+let authSettings = Promise.resolve();
+
 async function initAuth() {
+  const authError = takeAuthErrorFromUrl();
+  if (authError) setTimeout(() => showToast(`Sign-in didn't finish: ${authError}`), 300);
   try {
     const config = (await (await fetch("/config")).json()).supabase || {};
     if (!config.url || !config.anon_key || !window.supabase) return;
@@ -208,7 +274,7 @@ async function initAuth() {
       auth: { flowType: "pkce", persistSession: true, detectSessionInUrl: true },
     });
     authReady = true;
-    fetch(`${config.url}/auth/v1/settings`, { headers: { apikey: config.anon_key } })
+    authSettings = fetch(`${config.url}/auth/v1/settings`, { headers: { apikey: config.anon_key } })
       .then(r => r.json()).then(s => { googleEnabled = Boolean(s.external?.google); }).catch(() => {});
     sb.auth.onAuthStateChange((event, newSession) => {
       session = newSession;
@@ -249,7 +315,6 @@ document.getElementById("auth-close").addEventListener("click", () => authDialog
 authDialog.addEventListener("click", event => { if (event.target === authDialog) authDialog.close(); });
 authForm.addEventListener("submit", submitAuth);
 document.getElementById("google-btn").addEventListener("click", signInWithGoogle);
-document.getElementById("sign-out")?.addEventListener("click", () => sb?.auth.signOut());
 
 document.getElementById("saved-btn")?.addEventListener("click", () => {
   if (location.pathname !== "/") location.href = "/#saved";
