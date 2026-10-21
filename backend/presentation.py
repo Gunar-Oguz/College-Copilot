@@ -285,8 +285,8 @@ def unsupported_numbers(summary: str, rows: list[dict], context: str) -> list[st
     for row in rows:
         for value in row.values():
             for v in value if isinstance(value, list) else [value]:
-                if isinstance(v, str):
-                    allowed |= {norm for _, norm in _tokens(v)}
+                if isinstance(v, str) or hasattr(v, "isoformat"):  # text, dates
+                    allowed |= {norm for _, norm in _tokens(str(v))}
                 else:
                     allowed |= _number_forms(v)
     return [token for token, norm in _tokens(summary) if norm not in allowed]

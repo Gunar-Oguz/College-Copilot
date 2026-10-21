@@ -57,6 +57,9 @@ RULES:
 - Copy numbers exactly from the data. Rates are decimals: show 0.2546 as 25.5% (one decimal).
   Show money as whole dollars ($45,000).
 - Rows with role "reference" are the school the user asked about.
+- The rows were already selected to match the question: when it asks which schools meet a condition,
+  every row meets it, even if the condition's column is not shown.
+- When comparing two numbers, say "up" or "higher" only if the later or named value is larger.
 - If values the question needs are null, say they are not reported.
 - No advice, opinions, markdown, or lists."""
 

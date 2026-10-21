@@ -7,6 +7,15 @@ unless noted, keyed by `school_id` = IPEDS UNITID = `schools.id`. Rates are deci
 
 | Table | Source | Data year | Rows | Matched schools |
 |---|---|---|---:|---:|
+| `school_designations` | [AACSB, Phi Beta Kappa, CTCL, QuestBridge and Posse Foundation websites](https://www.aacsb.edu/accredited) | 2026 | 1,012 | 690 |
+| `area_wages` | [BLS Occupational Employment and Wage Statistics (metro areas)](https://www.bls.gov/oes/tables.htm) | May 2025 | 5,141 | 4,838 |
+| `occupations` | [BLS Occupational Employment and Wage Statistics and Employment Projections; O*NET 31.0](https://www.bls.gov/oes/tables.htm) | May 2025 wages; 2025-35 projections | 831 | 0 |
+| `campus_crime` | [Campus Safety and Security (Clery Act), U.S. Department of Education](https://ope.ed.gov/campussafety/) | Calendar year 2024 | 5,585 | 5,561 |
+| `accreditation` | [DAPIP, U.S. Department of Education](https://ope.ed.gov/dapip/) | as of Oct 2026 | 6,116 | 5,331 |
+| `program_accreditation` | [DAPIP, U.S. Department of Education](https://ope.ed.gov/dapip/) | as of Oct 2026 | 11,042 | 2,604 |
+| `irs_990` | [Data from ProPublica Nonprofit Explorer (IRS Form 990)](https://projects.propublica.org/nonprofits/api) | mostly tax year 2023 (latest filing per school) | 1,562 | 1,521 |
+| `athletics` | [Equity in Athletics Data Analysis (EADA), U.S. Department of Education](https://ope.ed.gov/athletics/) | 2024-25 | 2,037 | 2,033 |
+| `athletics_sports` | [Equity in Athletics Data Analysis (EADA), U.S. Department of Education](https://ope.ed.gov/athletics/) | 2024-25 | 18,045 | 2,033 |
 | `ipeds_admissions` | [IPEDS, National Center for Education Statistics](https://nces.ed.gov/ipeds/datacenter/DataFiles.aspx) | 2023-24 | 1,972 | 1,928 |
 | `ipeds_costs` | [IPEDS, National Center for Education Statistics](https://nces.ed.gov/ipeds/datacenter/DataFiles.aspx) | 2023-24 | 3,759 | 3,651 |
 | `ipeds_enrollment` | [IPEDS, National Center for Education Statistics](https://nces.ed.gov/ipeds/datacenter/DataFiles.aspx) | 2023-24 | 5,914 | 5,678 |
@@ -14,8 +23,236 @@ unless noted, keyed by `school_id` = IPEDS UNITID = `schools.id`. Rates are deci
 | `ipeds_finance` | [IPEDS, National Center for Education Statistics](https://nces.ed.gov/ipeds/datacenter/DataFiles.aspx) | 2023-24 | 5,982 | 5,671 |
 | `ipeds_outcomes` | [IPEDS, National Center for Education Statistics](https://nces.ed.gov/ipeds/datacenter/DataFiles.aspx) | 2023-24 | 5,434 | 5,214 |
 | `ipeds_profile` | [IPEDS, National Center for Education Statistics](https://nces.ed.gov/ipeds/datacenter/DataFiles.aspx) | 2023-24 | 6,072 | 5,730 |
+| `cip_occupations` | [NCES CIP 2020 to SOC 2018 Crosswalk](https://nces.ed.gov/ipeds/cipcode/resources.aspx?y=56) | CIP 2020 / SOC 2018 | 5,903 | 0 |
+| `research_spending` | [NSF NCSES Higher Education Research and Development (HERD) Survey](https://ncses.nsf.gov/surveys/higher-education-research-development) | FY2024 | 671 | 659 |
+| `cohort_default_rates` | [Official Cohort Default Rates, Federal Student Aid](https://fsapartners.ed.gov/knowledge-center/topics/default-management/official-cohort-default-rates-schools) | FY2023 (with FY2022, FY2021) | 5,091 | 5,007 |
 | `mobility` | [Opportunity Insights](https://opportunityinsights.org/data/) | 1980-82 birth cohorts | 2,287 | 2,235 |
 | `mobility_admissions_by_income` | [Opportunity Insights](https://opportunityinsights.org/data/) | 2010-2015 entering classes | 2,002 | 142 |
+| `area_demographics` | [U.S. Census Bureau, American Community Survey 2020-2024 5-year estimates](https://www.census.gov/programs-surveys/acs/data/summary-file.html) | 2020-2024 | 6,100 | 6,100 |
+| `gi_bill` | [VA GI Bill Comparison Tool](https://www.va.gov/education/gi-bill-comparison-tool/) | CY 2025 counts and payments; flags as of Oct 2026 | 7,949 | 5,165 |
+
+## `school_designations`
+
+School memberships and recognitions from public lists, one row per school and designation: AACSB business school accreditation, Phi Beta Kappa chapters, Colleges That Change Lives, QuestBridge college partners and Posse Foundation partners (as listed on each organization's website in October 2026). A school missing here does not have that designation
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `designation` | text | One of: 'AACSB accredited business school', 'Phi Beta Kappa chapter', 'Colleges That Change Lives', 'QuestBridge college partner', 'Posse Foundation partner' |
+| `source_url` | text | Page the designation was taken from |
+| `matched_name` | text | Institution name as written on the source list |
+
+## `area_wages`
+
+Local job market: all-occupation wages in the metropolitan area around each school (BLS OEWS May 2025). One row per school; schools outside a metro area are missing.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID; join to schools.id |
+| `metro_code` | text | Core Based Statistical Area (metro area) code |
+| `metro_name` | text | Metropolitan statistical area containing the school, e.g. 'San Jose-Sunnyvale-Santa Clara, CA' |
+| `employment_total` | integer | Wage-and-salary jobs in the metro area, all occupations, May 2025 |
+| `median_annual_salary` | integer | Median annual wage in dollars for all occupations in the metro area, May 2025 (U.S. median is 50980) |
+| `mean_annual_salary` | integer | Mean annual wage in dollars for all occupations in the metro area, May 2025 (U.S. mean is 69770) |
+
+## `occupations`
+
+Careers: one row per occupation (NOT per school). Wages from BLS OEWS May 2025 (national, all industries), projections from BLS Employment Projections 2025-35. Link programs to occupations with programs.cip_code = cip_occupations.cip4_code AND cip_occupations.soc_code = occupations.soc_code. Includes information from O*NET 31.0 by the U.S. Department of Labor, Employment and Training Administration (USDOL/ETA), used under the CC BY 4.0 license.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `soc_code` | text | Standard Occupational Classification code 'NN-NNNN', e.g. '15-1252' = Software Developers, '29-1141' = Registered Nurses |
+| `title` | text | Occupation title, e.g. 'Software Developers' |
+| `major_group` | text | SOC major group title, e.g. 'Computer and Mathematical Occupations', 'Healthcare Practitioners and Technical Occupations' |
+| `description` | text | What workers in this occupation do (O*NET 31.0) |
+| `employment_total` | integer | U.S. wage-and-salary employment, May 2025 (BLS OEWS; excludes self-employed) |
+| `median_annual_salary` | integer | Median annual wage in dollars, May 2025 (BLS OEWS); null for performers paid only hourly (actors, dancers, musicians) |
+| `mean_annual_salary` | integer | Mean (average) annual wage in dollars, May 2025 (BLS OEWS) |
+| `pct10_annual_salary` | integer | 10th percentile annual wage in dollars, May 2025 (BLS OEWS) |
+| `pct25_annual_salary` | integer | 25th percentile annual wage in dollars, May 2025 (BLS OEWS) |
+| `pct75_annual_salary` | integer | 75th percentile annual wage in dollars, May 2025 (BLS OEWS) |
+| `pct90_annual_salary` | integer | 90th percentile annual wage in dollars, May 2025 (BLS OEWS) |
+| `projected_employment_2035_total` | integer | Projected employment in 2035 including self-employed (BLS Employment Projections) |
+| `projected_growth_rate` | numeric | Projected employment change 2025-35 as a decimal, e.g. 0.41 = +41%; negative = decline (BLS Employment Projections; all-occupation average is 0.035) |
+| `annual_openings_count` | integer | Projected average annual job openings 2025-35, from growth plus replacement of workers who leave (BLS Employment Projections) |
+| `self_employed_share` | numeric | Share of workers who are self-employed, 2025 (BLS Employment Projections) |
+| `entry_education` | text | Typical education needed for entry: 'Doctoral or professional degree', "Master's degree", "Bachelor's degree", "Associate's degree", 'Postsecondary nondegree award', 'Some college, no degree', 'High school diploma or equivalent', 'No formal educational credential' |
+| `work_experience` | text | Work experience in a related occupation needed: 'None', 'Less than 5 years', '5 years or more' |
+| `on_the_job_training` | text | Typical on-the-job training needed, e.g. 'None', 'Short-term on-the-job training', 'Internship/residency', 'Apprenticeship' |
+| `job_zone` | integer | O*NET Job Zone 1-5 = preparation needed: 1 little or none, 2 some, 3 medium, 4 considerable (usually a bachelor's), 5 extensive (usually graduate degree) |
+
+## `campus_crime`
+
+Clery Act campus crime statistics for calendar year 2024 (U.S. Department of Education Campus Safety and Security survey). Counts are incidents reported ON CAMPUS, summed over all of a school's campuses; residence_hall_* columns are the on-campus student housing subset. Counts are reported crimes, not convictions, and depend on campus size and reporting practices; compare schools with criminal_offenses_per_1000_students.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `campus_count` | integer | Number of campuses/sites the school reports Clery data for (counts below are summed over them) |
+| `students_total` | integer | Total enrollment used by the Clery file (institution-wide headcount) |
+| `murder_count` | integer | Murder/non-negligent manslaughter on campus in 2024 (Clery criminal offenses) |
+| `negligent_manslaughter_count` | integer | Negligent manslaughter on campus in 2024 (Clery criminal offenses) |
+| `rape_count` | integer | Rape on campus in 2024 (Clery criminal offenses) |
+| `fondling_count` | integer | Fondling on campus in 2024 (Clery criminal offenses) |
+| `incest_count` | integer | Incest on campus in 2024 (Clery criminal offenses) |
+| `statutory_rape_count` | integer | Statutory rape on campus in 2024 (Clery criminal offenses) |
+| `robbery_count` | integer | Robbery on campus in 2024 (Clery criminal offenses) |
+| `aggravated_assault_count` | integer | Aggravated assault on campus in 2024 (Clery criminal offenses) |
+| `burglary_count` | integer | Burglary on campus in 2024 (Clery criminal offenses) |
+| `motor_vehicle_theft_count` | integer | Motor vehicle theft on campus in 2024 (Clery criminal offenses) |
+| `arson_count` | integer | Arson on campus in 2024 (Clery criminal offenses) |
+| `criminal_offenses_total` | integer | Total on-campus Clery criminal offenses in 2024 (murder, manslaughter, sex offenses, robbery, aggravated assault, burglary, motor vehicle theft, arson) |
+| `criminal_offenses_per_1000_students` | numeric | On-campus criminal offenses in 2024 per 1,000 enrolled students (criminal_offenses_total / students_total * 1000) |
+| `sex_offenses_total` | integer | On-campus sex offenses in 2024 (rape + fondling + incest + statutory rape) |
+| `criminal_offenses_total_2023` | integer | Total on-campus criminal offenses in 2023, for trend |
+| `criminal_offenses_total_2022` | integer | Total on-campus criminal offenses in 2022, for trend |
+| `domestic_violence_count` | integer | Domestic violence incidents on campus in 2024 (VAWA offenses) |
+| `dating_violence_count` | integer | Dating violence incidents on campus in 2024 (VAWA offenses) |
+| `stalking_count` | integer | Stalking incidents on campus in 2024 (VAWA offenses) |
+| `liquor_arrests_count` | integer | On-campus arrests for liquor law violations in 2024 |
+| `drug_arrests_count` | integer | On-campus arrests for drug law violations in 2024 |
+| `weapons_arrests_count` | integer | On-campus arrests for weapons law violations in 2024 |
+| `liquor_referrals_count` | integer | On-campus disciplinary referrals (not arrests) for liquor law violations in 2024 |
+| `drug_referrals_count` | integer | On-campus disciplinary referrals (not arrests) for drug law violations in 2024 |
+| `weapons_referrals_count` | integer | On-campus disciplinary referrals (not arrests) for weapons law violations in 2024 |
+| `hate_crimes_count` | integer | On-campus hate crimes in 2024 (all offense types, including simple assault, larceny, intimidation and vandalism) |
+| `residence_hall_offenses_total` | integer | Criminal offenses in on-campus student housing in 2024 (a subset of criminal_offenses_total) |
+| `residence_hall_sex_offenses_total` | integer | Sex offenses (rape, fondling, incest, statutory rape) in on-campus student housing in 2024 |
+| `residence_hall_burglary_count` | integer | Burglaries in on-campus student housing in 2024 |
+
+## `accreditation`
+
+Institutional accreditation from the Department of Education's DAPIP database: current accreditor, status, next review and latest accreditor actions. Only schools with a current institutional accreditation are included.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `institutional_accreditor` | text | Current institutional accreditor(s), e.g. 'WASC Senior College and University Commission', 'Higher Learning Commission'; several are joined with '; ' |
+| `institutional_accreditors_count` | integer | Number of current institutional accreditors (usually 1) |
+| `accreditation_status` | text | 'Accredited' or 'Preaccredited' (candidate for accreditation) |
+| `accredited_since` | date | Date of the earliest current institutional accreditation (some old dates are estimates) |
+| `next_review_date` | date | Next scheduled comprehensive review by the institutional accreditor (may be in the past if not updated) |
+| `latest_action` | text | Most recent action by the institutional accreditor, e.g. 'Renewal of Accreditation', 'Grant Substantive Change: Program', 'Probation or Equivalent or a More Severe Status: Probation' |
+| `latest_action_date` | date | Date of latest_action |
+| `latest_standing_action` | text | Most recent action that affects standing (ignores routine substantive-change and location approvals), e.g. 'Renewal of Accreditation', 'Removal of Monitoring Status', 'Probation or Equivalent or a More Severe Status: Warning' |
+| `latest_standing_action_date` | date | Date of latest_standing_action |
+| `on_probation_or_warning` | boolean | True when latest_standing_action is a sanction (probation, warning, show cause or adverse action) not yet followed by a renewal or removal. 'Heightened Monitoring or Focused Review' alone does not count |
+
+## `program_accreditation`
+
+Currently accredited programs at each school from specialized accreditors in the Department of Education's DAPIP database (law, medicine, nursing, dentistry, psychology, teacher education, health professions, ...; ABET engineering and AACSB business are not in DAPIP). Several rows per school; programs at a school's branch locations are listed under the parent school.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `accreditor` | text | Specialized accrediting agency, e.g. 'American Bar Association, Council of the Section of Legal Education and Admissions to the Bar', 'Liaison Committee on Medical Education', 'Commission on Collegiate Nursing Education' |
+| `program_name` | text | Accredited program type, e.g. 'Law (LAW) - Professional schools', 'Medicine (MED) - Programs leading to the M.D. degree', 'Nursing (CNURED) - Nursing education programs at the baccalaureate degree levels'. Use ILIKE to search |
+| `department` | text | School or department offering the program, when given (e.g. 'UCLA School of Dentistry Predoctoral Dental Education') |
+| `accreditation_status` | text | 'Accredited' or 'Preaccredited' |
+| `accredited_since` | date | Date the program was first accredited (some old dates are estimates) |
+| `next_review_date` | date | Next scheduled review of the program (may be in the past if not updated) |
+
+## `irs_990`
+
+IRS Form 990 finances of private nonprofit colleges, latest filing with data per EIN. Data from ProPublica Nonprofit Explorer (IRS Form 990). All amounts in dollars. When shared_ein is true the figures are for the whole multi-campus institution.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `ein` | text | IRS Employer Identification Number (9 digits) the filing belongs to |
+| `organization_name` | text | Organization name on the IRS filing (often the legal name, e.g. 'President And Fellows Of Harvard College') |
+| `shared_ein` | boolean | True when several IPEDS campuses share this EIN, so the figures cover the whole institution or system, not just this campus |
+| `campuses_sharing_ein_count` | integer | Number of IPEDS campuses that share this EIN (1 = only this school) |
+| `tax_year` | integer | Tax year of the latest filing with financial data (mostly 2023; a few schools only have older filings, so check it). The fiscal year usually ends in this year or the next |
+| `fiscal_year_end` | text | End of the fiscal year covered by the filing, as YYYY-MM |
+| `form_type` | text | IRS form filed: '990', '990-EZ' or '990-PF' |
+| `total_revenue_amount` | bigint | Total revenue for the year in dollars (Form 990 Part I line 12) |
+| `total_expenses_amount` | bigint | Total functional expenses for the year in dollars |
+| `total_assets_amount` | bigint | Total assets at year end in dollars (includes the endowment) |
+| `total_liabilities_amount` | bigint | Total liabilities at year end in dollars |
+| `net_assets_amount` | bigint | Net assets (fund balance) at year end in dollars |
+| `contributions_amount` | bigint | Contributions, gifts and grants received during the year in dollars |
+| `program_service_revenue_amount` | bigint | Program service revenue in dollars (mostly tuition and fees, plus e.g. hospital or research revenue) |
+| `investment_income_amount` | bigint | Investment income (interest, dividends) in dollars; excludes realized gains |
+| `net_gain_on_assets_amount` | bigint | Net gain or loss from sales of securities and other assets in dollars (can be negative) |
+| `officer_compensation_amount` | bigint | Compensation of current officers, directors, trustees and key employees in dollars |
+| `other_salaries_amount` | bigint | All other salaries and wages in dollars |
+| `tax_exempt_bonds_debt_amount` | bigint | Tax-exempt bond liabilities outstanding at year end in dollars |
+| `filing_pdf_url` | text | Link to the filing (PDF) on ProPublica, when available |
+
+## `athletics`
+
+Equity in Athletics (EADA) 2024-25 intercollegiate athletics data, one row per school: division, athletes and teams by sex, athletic scholarships, revenue/expenses and coach salaries. Shares are decimals. For Title IX comparisons use women_athletes_share and women_athletic_aid_share vs undergrad_women_share. Many schools report revenue equal to expenses (institutional support counts as revenue), so do not read their difference as profit.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `classification` | text | Athletic association/division, e.g. 'NCAA Division I-FBS', 'NCAA Division III with football', 'NAIA Division I', 'NJCAA Division I' |
+| `sports_count` | integer | Number of varsity sports with at least one participant |
+| `men_teams_count` | integer | Sports with a men's (or coed men) team |
+| `women_teams_count` | integer | Sports with a women's (or coed women) team |
+| `men_athletes_count` | integer | Unduplicated men varsity athletes (each person counted once even if on several teams) |
+| `women_athletes_count` | integer | Unduplicated women varsity athletes |
+| `athletes_total` | integer | Unduplicated varsity athletes, men + women |
+| `fulltime_undergrad_count` | integer | Full-time undergraduates (EADA enrollment base) |
+| `women_athletes_share` | numeric | Women's share of varsity athletes (Title IX participation comparison; decimal) |
+| `undergrad_women_share` | numeric | Women's share of full-time undergraduates, to compare with women_athletes_share |
+| `athletic_aid_men_amount` | bigint | Athletically related student aid (scholarships) to men's teams, dollars |
+| `athletic_aid_women_amount` | bigint | Athletically related student aid to women's teams, dollars |
+| `athletic_aid_total_amount` | bigint | Total athletically related student aid incl. coed teams, dollars |
+| `women_athletic_aid_share` | numeric | Women's share of athletic aid (women / (men + women), excluding coed teams); compare with women_athletes_share |
+| `total_revenue_amount` | bigint | Grand total athletics revenue, dollars (incl. revenue not allocated to a sport) |
+| `total_expenses_amount` | bigint | Grand total athletics expenses, dollars (incl. expenses not allocated to a sport) |
+| `mens_teams_expenses_amount` | bigint | Expenses of men's and coed-men's teams, dollars |
+| `womens_teams_expenses_amount` | bigint | Expenses of women's and coed-women's teams, dollars |
+| `football_revenue_amount` | bigint | Football revenue, dollars (null if no football team) |
+| `football_expenses_amount` | bigint | Football expenses, dollars |
+| `mens_basketball_revenue_amount` | bigint | Men's basketball revenue, dollars |
+| `mens_basketball_expenses_amount` | bigint | Men's basketball expenses, dollars |
+| `womens_basketball_revenue_amount` | bigint | Women's basketball revenue, dollars |
+| `womens_basketball_expenses_amount` | bigint | Women's basketball expenses, dollars |
+| `recruiting_expenses_amount` | bigint | Total recruiting expenses, dollars |
+| `recruiting_men_amount` | bigint | Recruiting expenses for men's teams, dollars |
+| `recruiting_women_amount` | bigint | Recruiting expenses for women's teams, dollars |
+| `head_coach_avg_salary_mens_teams` | integer | Average annual salary per head coach of men's teams, dollars |
+| `head_coach_avg_salary_womens_teams` | integer | Average annual salary per head coach of women's teams, dollars |
+| `assistant_coach_avg_salary_mens_teams` | integer | Average annual salary per assistant coach of men's teams, dollars |
+| `assistant_coach_avg_salary_womens_teams` | integer | Average annual salary per assistant coach of women's teams, dollars |
+
+## `athletics_sports`
+
+Equity in Athletics (EADA) 2024-25, one row per school and varsity sport: participants, revenue and expenses by men's/women's team. Football and men's basketball usually carry most revenue.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `sport` | text | Sport name as in EADA, e.g. 'Football', 'Basketball', 'Soccer', 'Track and Field (Outdoor)' |
+| `men_participants_count` | integer | Men participants (men's + coed men) |
+| `women_participants_count` | integer | Women participants (women's + coed women) |
+| `men_revenue_amount` | bigint | Revenue of the men's (and coed men's) team, dollars |
+| `women_revenue_amount` | bigint | Revenue of the women's (and coed women's) team, dollars |
+| `revenue_amount` | bigint | Total revenue of the sport, dollars |
+| `men_expenses_amount` | bigint | Expenses of the men's (and coed men's) team, dollars |
+| `women_expenses_amount` | bigint | Expenses of the women's (and coed women's) team, dollars |
+| `expenses_amount` | bigint | Total expenses of the sport, dollars |
 
 ## `ipeds_admissions`
 
@@ -249,6 +486,76 @@ Loaded 2026-10-20.
 | `veterans_url` | text | Veterans tuition policies web address |
 | `athlete_grad_rate_url` | text | Student-athlete graduation rate web address |
 
+## `cip_occupations`
+
+Crosswalk from majors (CIP 2020) to the occupations they prepare for (SOC 2018), many-to-many; NOT one row per school. Join: programs.cip_code = cip_occupations.cip4_code AND cip_occupations.soc_code = occupations.soc_code. A 4-digit CIP family maps to several 6-digit CIPs, so use SELECT DISTINCT soc_code (or GROUP BY) to avoid duplicate occupations.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `soc_code` | text | Occupation code 'NN-NNNN'; join to occupations.soc_code. Where BLS publishes only a combined code (e.g. 13-1020 Buyers and Purchasing Agents) this is the combined code |
+| `cip_code` | text | 6-digit CIP 2020 program code 'NN.NNNN', e.g. '11.0701' = Computer Science |
+| `cip4_code` | text | 4-digit CIP family 'NN.NN'; join to programs.cip_code, e.g. '11.07' = Computer Science |
+| `cip_title` | text | CIP 2020 program title, e.g. 'Computer Science.' |
+| `soc_title` | text | SOC 2018 detailed occupation title from the crosswalk (may be narrower than occupations.title) |
+
+## `research_spending`
+
+University research & development spending, FY2024 (NSF HERD Survey), one row per school; covers about 680 research-active institutions with at least $1M of R&D. Amounts are in dollars (converted from the survey's thousands). Some rows combine a university with its medical center or sister campus; see herd_name.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `herd_name` | text | Institution name in HERD (may be a combined unit, e.g. a university plus its medical center) |
+| `rd_total_amount` | bigint | Total research & development expenditures in FY2024, all sources, dollars |
+| `rd_national_rank` | integer | National rank by total R&D expenditures among all HERD institutions (1 = largest) |
+| `rd_federal_amount` | bigint | R&D expenditures funded by the federal government, dollars |
+| `rd_state_local_amount` | bigint | R&D expenditures funded by state and local government, dollars |
+| `rd_business_amount` | bigint | R&D expenditures funded by business, dollars |
+| `rd_nonprofit_amount` | bigint | R&D expenditures funded by nonprofit organizations, dollars |
+| `rd_institution_amount` | bigint | R&D expenditures funded by the institution's own funds, dollars |
+| `rd_other_sources_amount` | bigint | R&D expenditures funded by all other sources, dollars |
+| `rd_federal_share` | numeric | Share of R&D funded by the federal government (decimal) |
+| `rd_computer_sciences_amount` | bigint | R&D expenditures in computer and information sciences, all sources, dollars |
+| `rd_engineering_amount` | bigint | R&D expenditures in engineering, all sources, dollars |
+| `rd_geosciences_amount` | bigint | R&D expenditures in geosciences, atmospheric sciences, and ocean sciences (incl. atmospheric and ocean sciences), all sources, dollars |
+| `rd_life_sciences_amount` | bigint | R&D expenditures in life sciences (biological, biomedical, health, agricultural sciences), all sources, dollars |
+| `rd_math_amount` | bigint | R&D expenditures in mathematics and statistics, all sources, dollars |
+| `rd_physical_sciences_amount` | bigint | R&D expenditures in physical sciences, all sources, dollars |
+| `rd_psychology_amount` | bigint | R&D expenditures in psychology, all sources, dollars |
+| `rd_social_sciences_amount` | bigint | R&D expenditures in social sciences, all sources, dollars |
+| `rd_other_sciences_amount` | bigint | R&D expenditures in other sciences, all sources, dollars |
+| `rd_non_science_amount` | bigint | R&D expenditures in non-S&E fields (non-science & engineering: business, education, humanities, law, arts, etc.), all sources, dollars |
+| `rd_medical_school_amount` | bigint | R&D expenditures at the medical school, dollars (null if none reported) |
+| `rd_basic_research_amount` | bigint | R&D expenditures on basic research, dollars |
+| `rd_applied_research_amount` | bigint | R&D expenditures on applied research, dollars |
+| `rd_personnel_count` | integer | Headcount of R&D personnel paid from R&D funds (researchers, technicians, support staff) |
+| `rd_researchers_count` | integer | Headcount of researchers paid from R&D funds |
+
+## `cohort_default_rates`
+
+Official federal student loan cohort default rates (Federal Student Aid, released 2026): share of borrowers entering repayment in a fiscal year who defaulted within about three years. Rates are decimals rounded to 0.001. All three cohorts are far below historical levels (FY2021-FY2022 near zero) because of the 2020-2023 payment pause and repayment on-ramp; default_rate_fy2023 is the most recent.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `opeid6` | text | 6-digit OPEID the rates are published for |
+| `cdr_school_name` | text | School name in the FSA file |
+| `shared_with_main_campus` | boolean | True for a branch campus: the rate covers the whole institution (all campuses sharing the OPEID), not this campus alone |
+| `default_rate_fy2023` | numeric | Official 3-year cohort default rate for borrowers entering repayment in FY2023 (decimal, 0.05 = 5%). Most recent year |
+| `default_rate_fy2022` | numeric | Official cohort default rate, FY2022 cohort (near zero nationally due to the loan payment pause) |
+| `default_rate_fy2021` | numeric | Official cohort default rate, FY2021 cohort (near zero nationally due to the loan payment pause) |
+| `borrowers_in_repayment_count` | integer | Borrowers who entered repayment in FY2023 (denominator of default_rate_fy2023) |
+| `defaulted_borrowers_count` | integer | FY2023-cohort borrowers who defaulted (numerator of default_rate_fy2023) |
+| `uses_average_formula` | boolean | True when fewer than 30 borrowers entered repayment, so FSA averaged three cohorts |
+| `program_length` | text | Longest program the school offers, e.g. "Bachelor's degree", 'Doctoral degree', "Associate's degree" |
+| `school_type` | text | Control per FSA: 'Public', 'Private nonprofit', 'Proprietary (for-profit)', or foreign |
+
 ## `mobility`
 
 Opportunity Insights Mobility Report Cards: parent income and students' later earnings (students born 1980-82, earnings measured in 2014). Rates are decimals.
@@ -291,3 +598,72 @@ Loaded 2026-10-20.
 | `relative_attend_same_sat` | numeric | Relative attendance rate among students with the same SAT/ACT score |
 | `relative_admit_attend_same_sat` | numeric | Attendance rate among applicants with the same test score, relative to average (captures admission preferences) |
 | `college_group` | text | Opportunity Insights college group, e.g. 'Ivy Plus', 'Other Top 100 Private' |
+
+## `area_demographics`
+
+Census ACS 2020-2024 5-year estimates for the ZIP code (ZCTA) where the campus is located. Describes the surrounding neighborhood, not the student body; campus ZIPs are often dominated by students, so incomes there can look low
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `zcta` | text | 5-digit ZIP Code Tabulation Area of the campus (from schools.zip) |
+| `population_total` | integer | Total population of the ZIP code area (includes students living in dorms) |
+| `median_age` | numeric | Median age of residents, in years |
+| `median_household_income_amount` | integer | Median household income in 2024 dollars (households only, excludes dorm residents; 250001 means $250,000 or more) |
+| `median_gross_rent_cost` | integer | Median monthly gross rent (rent plus utilities) in dollars; 3501 means $3,500 or more |
+| `median_home_value_amount` | integer | Median value of owner-occupied homes in dollars; 2000001 means $2,000,000 or more |
+| `poverty_share` | numeric | Share of residents (poverty status determined, excludes dorm residents) with income below the poverty line |
+| `bachelors_or_higher_share` | numeric | Share of adults 25 and older with a bachelor's degree or higher |
+| `graduate_degree_share` | numeric | Share of adults 25 and older with a master's, professional or doctoral degree |
+| `white_share` | numeric | Share of residents who are White, not Hispanic |
+| `black_share` | numeric | Share of residents who are Black, not Hispanic |
+| `asian_share` | numeric | Share of residents who are Asian, not Hispanic |
+| `hispanic_share` | numeric | Share of residents who are Hispanic or Latino (any race) |
+
+## `gi_bill`
+
+VA GI Bill Comparison Tool: GI Bill students, Yellow Ribbon participation and payments, housing allowance, veteran support programs and VA caution flags. Flags and descriptive fields come from the school's main VA facility (approved, most GI Bill students); student and payment totals cover all its facilities. Counts and payments are for calendar year 2025; rates are decimals.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `facility_code` | text | VA facility code of the main facility used for this row |
+| `va_institution_name` | text | Institution name in VA records (upper case) |
+| `va_school_type` | text | VA school type: 'PUBLIC', 'PRIVATE', 'FOR PROFIT', 'FOREIGN', ... |
+| `va_approved` | boolean | Main facility is currently approved by VA for GI Bill benefits |
+| `approval_status` | text | VA approval status code: 'APRVD' approved, 'WTHDRN' withdrawn, 'SUSP' suspended |
+| `gi_bill_students_count` | integer | GI Bill beneficiaries at the main facility in the last calendar year |
+| `yellow_ribbon` | boolean | School is a Yellow Ribbon Program participant (covers tuition above the Post-9/11 GI Bill cap together with VA) |
+| `monthly_housing_allowance_amount` | integer | Post-9/11 GI Bill monthly housing allowance in dollars for students attending in person at the main campus (based on military BAH for its ZIP code) |
+| `student_veteran_group` | boolean | Has a student veterans group (per VA) |
+| `student_veteran_group_ipeds` | boolean | Reports a student veterans organization to IPEDS |
+| `principles_of_excellence` | boolean | Signed the VA Principles of Excellence (consumer protections for veterans) |
+| `eight_keys_to_veteran_success` | boolean | Department of Education 'Eight Keys to Veteran Success' site |
+| `dod_tuition_assistance_mou` | boolean | Signed the DoD Tuition Assistance memorandum of understanding (active-duty members can use TA) |
+| `in_state_tuition_for_veterans` | boolean | Complies with Section 702 of the Veterans Choice Act: charges veterans and covered dependents in-state tuition (public schools) |
+| `credit_for_military_training` | boolean | Awards academic credit for military training |
+| `veteran_point_of_contact` | boolean | Has a dedicated point of contact for veterans |
+| `vetsuccess_on_campus` | boolean | Has a VA VetSuccess on Campus counselor |
+| `soc_member` | boolean | Member of Servicemembers Opportunity Colleges |
+| `caution_flag` | boolean | VA caution flag: something students should look into before enrolling (e.g. Heightened Cash Monitoring, accreditation action, government settlement) |
+| `caution_flag_reason` | text | Reason(s) for the VA caution flag |
+| `accredited` | boolean | Accredited by an accreditor recognized by the Department of Education (per VA) |
+| `accreditation_type` | text | Type of institutional accreditor: 'regional', 'national' or 'hybrid' |
+| `accreditation_status` | text | Negative accreditation status if any (e.g. probation, warning, show cause); blank when in good standing |
+| `school_closing` | boolean | School is closing or has announced closure |
+| `school_closing_date` | text | Announced closing date (YYYY-MM-DD) when school_closing is true |
+| `complaints_count` | integer | Closed GI Bill feedback (complaints) cases against the main facility |
+| `veteran_retention_rate` | numeric | Retention rate of student veterans in bachelor's programs (decimal) |
+| `veteran_graduation_rate` | numeric | Graduation rate of student veterans (decimal) |
+| `veteran_transfer_out_rate` | numeric | Transfer-out rate of student veterans (decimal) |
+| `tuition_policy_url` | text | School web page with its veteran tuition policy |
+| `va_facilities_count` | integer | Number of VA facility codes (campuses, extension or online divisions, programs) linked to this school |
+| `gi_bill_students_all_facilities_count` | integer | GI Bill beneficiaries in the last calendar year across all of the school's VA facility codes (main campus, extension, online, ...) |
+| `post911_recipients_count` | integer | Students who received Post-9/11 GI Bill tuition payments in the last calendar year (all facilities) |
+| `post911_tuition_fees_amount` | numeric | Post-9/11 GI Bill tuition and fees VA paid to the school in the last calendar year, in dollars (all facilities) |
+| `yellow_ribbon_recipients_count` | integer | Students who received Yellow Ribbon funds in the last calendar year (all facilities) |
+| `yellow_ribbon_payment_amount` | numeric | Yellow Ribbon payments VA paid to the school in the last calendar year, in dollars (VA's share; the school matches it) (all facilities) |

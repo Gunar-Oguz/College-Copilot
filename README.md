@@ -27,8 +27,10 @@ college_cop/
 │   ├── locations.py           # ZIP/city → coordinates
 │   ├── similar_schools.py     # Similarity search
 │   ├── database.py            # Connections and the read-only query runner
+│   ├── source_data.py         # Shared helpers for the extra-source loaders
 │   └── load_*.py              # Data loaders
-├── data/                      # Schema SQL and curated aliases
+├── data/                      # Schema SQL, curated aliases; downloads (gitignored)
+├── docs/DATA_SOURCES.md       # Every source table and column
 ├── evals/                     # Question set with known answers + scorer
 ├── frontend/index.html        # Chat interface
 └── tests/
@@ -60,6 +62,29 @@ python load_programs.py --recreate
 python load_aliases.py        # school nicknames; run after schools load
 python load_zipcodes.py       # school coordinates + distance search; rerun after reloading schools
 ```
+
+Extra public sources (optional; `pip install -r requirements-data.txt` first). Each loader downloads
+its files to `data/<source>/`, replaces its tables and records itself in `data_sources`. Run
+`load_ipeds.py` first: the others use its directory file to map OPEIDs and ZIPs to schools.
+
+```bash
+python load_ipeds.py          # IPEDS: admissions, enrollment by race/gender, costs, finance, faculty, outcomes
+python load_mobility.py       # Opportunity Insights economic mobility
+python load_campus_safety.py  # Clery Act crime statistics
+python load_default_rates.py  # Federal student loan cohort default rates
+python load_athletics.py      # EADA / Title IX athletics
+python load_research.py       # NSF HERD research spending
+python load_gi_bill.py        # VA GI Bill Comparison Tool
+python load_accreditation.py  # DAPIP institutional and program accreditation
+python load_irs990.py         # IRS Form 990 via ProPublica (private nonprofits; ~10 min first run)
+python load_careers.py        # BLS wages and projections, O*NET, CIP-to-occupation crosswalk, metro wages
+python load_census.py         # Census ACS demographics of each campus ZIP code
+python load_designations.py   # AACSB, Phi Beta Kappa, CTCL, QuestBridge, Posse lists
+python document_sources.py    # regenerate docs/DATA_SOURCES.md
+```
+
+Every table and column is described in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md). The planner
+sees all loaded tables with those descriptions; answers name the sources their query used.
 
 ### 4. Run the app
 

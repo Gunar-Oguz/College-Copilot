@@ -150,3 +150,9 @@ def test_millions_and_billions_match_full_numbers():
 def test_booleans_show_yes_no():
     assert format_value(True, column_meta("hbcu", True)[1]) == "Yes"
     assert format_value(False, column_meta("hbcu", False)[1]) == "No"
+
+
+def test_dates_in_rows_allow_their_numbers():
+    import datetime
+    rows = [{"name": "Ohio State", "accredited_since": datetime.date(1913, 1, 1), "latest_action_date": datetime.date(2017, 7, 31)}]
+    assert unsupported_numbers("Accredited since 1913, renewed July 31, 2017.", rows, "") == []

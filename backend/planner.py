@@ -46,9 +46,13 @@ COLUMN_NOTES = """
   miles_between(schools.latitude, schools.longitude, 30.30526, -97.76259) AS distance_miles.
 - The other tables (ipeds_*, mobility, ...) come from other public sources and have one row per
   school unless their description says otherwise. Join them with t.school_id = schools.id and still
-  filter schools.year = the latest year. Their rates are also decimals 0-1. Prefer schools columns
-  when both have the measure; use these tables for what schools lacks (race/gender, room and board,
-  endowment, faculty, test policy, economic mobility, ...).
+  filter schools.year = the latest year. Their rates are also decimals 0-1.
+- Use schools columns for measures it has: graduation rate = schools.completion_rate, retention =
+  schools.retention_rate, acceptance rate = schools.admission_rate, size = schools.student_size, cost =
+  schools.cost_avg_net_price, earnings, debt. Use the other tables only for what schools lacks or for
+  breakdowns (by race/gender/Pell, 4-year rates, room and board, endowment, faculty, test policy,
+  crime, athletics, mobility, careers, ...).
+- school_designations has one row per (school, designation); to require two designations join it twice.
 """.strip()
 
 TOOLS = [
@@ -193,7 +197,7 @@ RULES:
 - For any family income, call net_price_column to get the cost column.
 - For "schools like X" questions, use find_similar_schools.
 - For "near", "within N miles of" or "close to" a city or ZIP, call resolve_location and use its
-  coordinates with miles_between in run_query. Use the first candidate when it is much larger than
+  coordinates with miles_between in run_query (never write your own distance formula). Use the first candidate when it is much larger than
   the rest or the state is given; if several similar-sized places fit, submit clarify. Near a
   school, use the latitude/longitude that resolve_school returned for it. Never guess coordinates.
   Select the distance AS distance_miles and always add WHERE miles_between(...) <= the radius
@@ -203,6 +207,7 @@ RULES:
   select schools.id and schools.name plus every column used to filter or sort; exclude NULLs in
   filtered or sorted columns; add LIMIT 50 unless a number or count is asked for.
 - If a named school can't be found or the data can't answer the question, submit cannot_answer.
+  Subjective quality (best dorms, food, social life, prestige) is not in the data: cannot_answer.
 
 Finish by calling submit_answer."""
 
