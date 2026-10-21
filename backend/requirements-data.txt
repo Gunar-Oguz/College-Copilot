@@ -1,0 +1,5 @@
+# Extra packages for the data loaders (load_*.py). Not needed to run the app.
+-r requirements.txt
+et_xmlfile==2.0.0
+openpyxl==3.1.5
+xlrd==2.0.1

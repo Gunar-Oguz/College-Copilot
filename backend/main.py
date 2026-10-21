@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import anthropic
@@ -11,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from database import execute_sql, get_latest_year
+from database import execute_sql, get_data_sources, get_latest_year
 from planner import plan_answer
 from presentation import build_blocks, unsupported_numbers
 
@@ -56,12 +57,15 @@ RULES:
 - Copy numbers exactly from the data. Rates are decimals: show 0.2546 as 25.5% (one decimal).
   Show money as whole dollars ($45,000).
 - Rows with role "reference" are the school the user asked about.
+- The rows were already selected to match the question: when it asks which schools meet a condition,
+  every row meets it, even if the condition's column is not shown.
+- When comparing two numbers, say "up" or "higher" only if the later or named value is larger.
 - If values the question needs are null, say they are not reported.
 - No advice, opinions, markdown, or lists."""
 
 NO_ANSWER_MESSAGE = (
     "I don't know. That question can't be answered from the data I have "
-    "(U.S. Department of Education College Scorecard)."
+    "(College Scorecard, IPEDS and other public sources)."
 )
 NO_RESULTS_MESSAGE = "No schools in the data match that question."
 
@@ -82,6 +86,17 @@ def fallback_summary(rows: list[dict]) -> str:
     if len(rows) == 1 and rows[0].get("name"):
         return f"Here is the data for {rows[0]['name']}."
     return f"Found {len(rows)} results."
+
+
+def describe_sources(query: str) -> str:
+    """Name the datasets behind an answer, based on the tables its query used."""
+    sources = [f"U.S. Department of Education College Scorecard, {get_latest_year()} data"]
+    for table in get_data_sources():
+        if re.search(rf"\b{table['table_name']}\b", query):
+            source = f"{table['source']} ({table['data_year']})" if table["data_year"] else table["source"]
+            if source not in sources:
+                sources.append(source)
+    return "; ".join(sources)
 
 
 def write_summary(question: str, rows: list[dict], context: str) -> str:
@@ -139,7 +154,7 @@ def ask(request: AskRequest):
         if not rows:
             return AskResponse(question=question, kind="no_results", response=NO_RESULTS_MESSAGE)
 
-        source = f"U.S. Department of Education College Scorecard, {get_latest_year()} data"
+        source = describe_sources(answer.source)
         return AskResponse(
             question=question,
             kind="result",

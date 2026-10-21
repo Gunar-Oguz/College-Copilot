@@ -44,6 +44,15 @@ COLUMN_NOTES = """
 - schools.latitude / schools.longitude locate each campus. miles_between(lat1, lon1, lat2, lon2)
   returns the distance in miles, e.g.
   miles_between(schools.latitude, schools.longitude, 30.30526, -97.76259) AS distance_miles.
+- The other tables (ipeds_*, mobility, ...) come from other public sources and have one row per
+  school unless their description says otherwise. Join them with t.school_id = schools.id and still
+  filter schools.year = the latest year. Their rates are also decimals 0-1.
+- Use schools columns for measures it has: graduation rate = schools.completion_rate, retention =
+  schools.retention_rate, acceptance rate = schools.admission_rate, size = schools.student_size, cost =
+  schools.cost_avg_net_price, earnings, debt. Use the other tables only for what schools lacks or for
+  breakdowns (by race/gender/Pell, 4-year rates, room and board, endowment, faculty, test policy,
+  crime, athletics, mobility, careers, ...).
+- school_designations has one row per (school, designation); to require two designations join it twice.
 """.strip()
 
 TOOLS = [
@@ -169,7 +178,8 @@ def net_price_column(family_income: float) -> dict:
     raise AssertionError("unreachable")
 
 
-def build_prompt(question: str, schema: str, latest_year: str) -> str:
+def build_prompt(schema: str, latest_year: str) -> str:
+    """System prompt: the same for every question, so it is cached."""
     return f"""Find the data that answers a question about U.S. colleges.
 
 SCHEMA:
@@ -187,7 +197,7 @@ RULES:
 - For any family income, call net_price_column to get the cost column.
 - For "schools like X" questions, use find_similar_schools.
 - For "near", "within N miles of" or "close to" a city or ZIP, call resolve_location and use its
-  coordinates with miles_between in run_query. Use the first candidate when it is much larger than
+  coordinates with miles_between in run_query (never write your own distance formula). Use the first candidate when it is much larger than
   the rest or the state is given; if several similar-sized places fit, submit clarify. Near a
   school, use the latitude/longitude that resolve_school returned for it. Never guess coordinates.
   Select the distance AS distance_miles and always add WHERE miles_between(...) <= the radius
@@ -197,8 +207,7 @@ RULES:
   select schools.id and schools.name plus every column used to filter or sort; exclude NULLs in
   filtered or sorted columns; add LIMIT 50 unless a number or count is asked for.
 - If a named school can't be found or the data can't answer the question, submit cannot_answer.
-
-QUESTION: "{question}"
+  Subjective quality (best dorms, food, social life, prestige) is not in the data: cannot_answer.
 
 Finish by calling submit_answer."""
 
@@ -256,11 +265,17 @@ class _Session:
 
 def plan_answer(question: str) -> Answer:
     session = _Session()
-    messages = [{"role": "user", "content": build_prompt(question, get_schema(), get_latest_year())}]
+    system = [{
+        "type": "text",
+        "text": build_prompt(get_schema(), get_latest_year()),
+        "cache_control": {"type": "ephemeral"},
+    }]
+    messages = [{"role": "user", "content": f'QUESTION: "{question}"'}]
     for _ in range(MAX_TOOL_ROUNDS):
         message = _get_client().messages.create(
             model=os.getenv("CLAUDE_MODEL", "claude-haiku-4-5"),
             max_tokens=1500,
+            system=system,
             tools=TOOLS,
             tool_choice={"type": "any"},
             messages=messages,
