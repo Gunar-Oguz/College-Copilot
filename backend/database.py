@@ -88,21 +88,37 @@ def get_latest_year() -> str:
     return rows[0]["year"] if rows and rows[0]["year"] else "2024-25"
 
 
-def get_schema(tables: tuple[str, ...] = ("schools", "programs")) -> str:
+def get_data_sources() -> list[dict]:
+    """Extra source tables (IPEDS, Opportunity Insights, ...) recorded by the loaders."""
+    rows = execute_sql("SELECT to_regclass('data_sources') IS NOT NULL AS loaded")
+    if not rows[0]["loaded"]:
+        return []
+    return execute_sql("SELECT table_name, source, data_year FROM data_sources ORDER BY table_name")
+
+
+def get_schema(tables: tuple[str, ...] | None = None) -> str:
+    """Columns of the core tables plus every loaded source table, with their descriptions."""
+    if tables is None:
+        tables = ("schools", "programs", *(s["table_name"] for s in get_data_sources()))
     rows = execute_sql(
         """
-        SELECT table_name, column_name, data_type
-        FROM information_schema.columns
-        WHERE table_name = ANY(%s)
-        ORDER BY table_name, ordinal_position
+        SELECT c.table_name, c.column_name, c.data_type,
+               col_description(format('%%I', c.table_name)::regclass, c.ordinal_position) AS note,
+               obj_description(format('%%I', c.table_name)::regclass, 'pg_class') AS table_note
+        FROM information_schema.columns c
+        WHERE c.table_schema = 'public' AND c.table_name = ANY(%s)
+        ORDER BY c.table_name, c.ordinal_position
         """,
         (list(tables),),
     )
     lines = []
     for table in tables:
-        lines.append(f"Table: {table}")
+        columns = [r for r in rows if r["table_name"] == table]
+        table_note = columns[0]["table_note"] if columns else None
+        lines.append(f"Table: {table}" + (f" ({table_note})" if table_note else ""))
         lines.extend(
-            f"- {r['column_name']}: {r['data_type']}" for r in rows if r["table_name"] == table
+            f"- {r['column_name']}: {r['data_type']}" + (f" -- {r['note']}" if r["note"] else "")
+            for r in columns
         )
         lines.append("")
     return "\n".join(lines).strip()

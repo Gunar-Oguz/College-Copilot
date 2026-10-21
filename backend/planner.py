@@ -44,6 +44,11 @@ COLUMN_NOTES = """
 - schools.latitude / schools.longitude locate each campus. miles_between(lat1, lon1, lat2, lon2)
   returns the distance in miles, e.g.
   miles_between(schools.latitude, schools.longitude, 30.30526, -97.76259) AS distance_miles.
+- The other tables (ipeds_*, mobility, ...) come from other public sources and have one row per
+  school unless their description says otherwise. Join them with t.school_id = schools.id and still
+  filter schools.year = the latest year. Their rates are also decimals 0-1. Prefer schools columns
+  when both have the measure; use these tables for what schools lacks (race/gender, room and board,
+  endowment, faculty, test policy, economic mobility, ...).
 """.strip()
 
 TOOLS = [

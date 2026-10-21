@@ -12,6 +12,7 @@ MAX_BARS = 25
 MAX_COMPARE_SCHOOLS = 6
 MIN_COMPARE_METRICS = 2
 
+YES_NO = {True: "Yes", False: "No"}
 OWNERSHIP_LABELS = {1: "Public", 2: "Private nonprofit", 3: "Private for-profit"}
 
 # column -> (label, format, better): better is "higher", "lower" or None
@@ -61,6 +62,8 @@ def _humanize(key: str) -> str:
 def column_meta(key: str, sample=None) -> tuple[str, str, str | None]:
     if key in COLUMNS:
         return COLUMNS[key]
+    if isinstance(sample, bool):
+        return _humanize(key), "yesno", None
     if key in TEXT_COLUMNS or isinstance(sample, str):
         return _humanize(key), "text", None
     if isinstance(sample, list):
@@ -89,6 +92,8 @@ def format_value(value, fmt: str) -> str:
         return ", ".join(str(v) for v in value) if value else "-"
     if fmt == "ownership":
         return OWNERSHIP_LABELS.get(value, str(value))
+    if fmt == "yesno":
+        return YES_NO.get(value, str(value))
     number = _to_float(value)
     if fmt == "text" or number is None:
         return str(value)
@@ -127,7 +132,7 @@ def _metric_columns(rows: list[dict], columns: list[str]) -> list[str]:
     for key in columns:
         sample = next((r[key] for r in rows if r.get(key) is not None), None)
         _, fmt, _ = column_meta(key, sample)
-        if fmt not in ("text", "list", "ownership") and sample is not None:
+        if fmt not in ("text", "list", "ownership", "yesno") and sample is not None:
             metrics.append(key)
     return metrics
 
@@ -192,7 +197,7 @@ def _table_block(rows: list[dict], columns: list[str]) -> dict:
         metas.append((key, *column_meta(key, sample)))
     return {
         "type": "table",
-        "columns": [{"label": label, "numeric": fmt not in ("text", "list", "ownership")}
+        "columns": [{"label": label, "numeric": fmt not in ("text", "list", "ownership", "yesno")}
                     for _, label, fmt, _ in metas],
         "rows": [
             {
@@ -238,7 +243,8 @@ def build_blocks(rows: list[dict], highlight: str | None = None) -> list[dict]:
     return blocks
 
 
-_NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?(?:k\b)?", re.IGNORECASE)
+_NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?(?:k\b|\s(?:million|billion)\b)?", re.IGNORECASE)
+_MULTIPLIERS = {"k": 1e3, "million": 1e6, "billion": 1e9}
 
 
 def _canonical(number: float) -> str:
@@ -254,15 +260,19 @@ def _number_forms(value) -> set[str]:
     if abs(number) <= 1:
         pct = number * 100
         candidates += [pct, round(pct), round(pct, 1)]
+    for scale in (1e6, 1e9):
+        if abs(number) >= scale:
+            candidates += [round(number / scale, digits) * scale for digits in (0, 1, 2)]
     return {_canonical(c) for c in candidates}
 
 
 def _tokens(text: str) -> list[tuple[str, str]]:
-    """(token, normalized value) for each number in text; "60k" is 60,000."""
+    """(token, normalized value) for each number in text; "60k" is 60,000, "$2.5 billion" 2.5e9."""
     tokens = []
     for token in _NUMBER_RE.findall(text):
-        number = float(token.rstrip("kK").replace(",", ""))
-        tokens.append((token, _canonical(number * 1000 if token[-1] in "kK" else number)))
+        digits, suffix = re.match(r"([\d,.]+)\s?([a-z]*)", token, re.IGNORECASE).group(1, 2)
+        number = float(digits.replace(",", "")) * _MULTIPLIERS.get(suffix.lower(), 1)
+        tokens.append((token, _canonical(number)))
     return tokens
 
 

@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
-from presentation import build_blocks, format_value, unsupported_numbers  # noqa: E402
+from presentation import build_blocks, column_meta, format_value, unsupported_numbers  # noqa: E402
 
 
 def school(i, **stats):
@@ -139,3 +139,14 @@ class TestDistance:
         assert bars["items"][0]["display"] == "1.4 mi"
         labels = [c["label"] for c in table["columns"]]
         assert "Distance" in labels and "Latitude" not in labels and "Longitude" not in labels
+
+
+def test_millions_and_billions_match_full_numbers():
+    rows = [{"name": "Howard University", "endowment_amount": 926633000}, {"name": "Harvard", "endowment_amount": 50748594000}]
+    assert unsupported_numbers("Howard has $927 million and Harvard $50.7 billion.", rows, "") == []
+    assert unsupported_numbers("Howard has $900 million.", rows, "") == ["900 million"]
+
+
+def test_booleans_show_yes_no():
+    assert format_value(True, column_meta("hbcu", True)[1]) == "Yes"
+    assert format_value(False, column_meta("hbcu", False)[1]) == "No"
