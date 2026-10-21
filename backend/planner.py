@@ -280,6 +280,12 @@ class _Session:
                 # Schools need their id (for Save buttons and source checks).
                 if rows and "name" in rows[0] and not {"id", "school_id"} & rows[0].keys():
                     return json.dumps({"error": "Add schools.id to the SELECT and run the query again."})
+                # Deadline rows need their school and type (for the "Deadline Type | Date" table).
+                deadline_cols = {"deadline_type", "deadline_date"}
+                if rows and deadline_cols & rows[0].keys() and \
+                        not (deadline_cols <= rows[0].keys() and {"id", "school_id", "unitid"} & rows[0].keys()):
+                    return json.dumps({"error": "Select school_deadlines.unitid, deadline_type and deadline_date, "
+                                                "then run the query again."})
                 return self._store(args["sql"], rows)
         except (UnsafeQueryError, psycopg2.Error, ValueError, TypeError, KeyError) as exc:
             message = getattr(exc, "pgerror", None) or str(exc)

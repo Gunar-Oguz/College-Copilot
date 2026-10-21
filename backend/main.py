@@ -198,6 +198,17 @@ def cannot_answer_response(question: str, school_ids: list[int]) -> AskResponse:
                        fallback={"school": school[0], "suggestions": suggestions})
 
 
+def with_school_names(rows: list[dict]) -> list[dict]:
+    """Add the school name to rows that only carry its id (e.g. deadline rows keyed by unitid)."""
+    ids = {r.get("unitid", r.get("school_id")) for r in rows if not r.get("name")} - {None}
+    ids = [i for i in ids if isinstance(i, int)]
+    if not ids:
+        return rows
+    names = {r["id"]: r["name"] for r in execute_sql("SELECT id, name FROM schools WHERE id = ANY(%s)", (ids,))}
+    return [{**r, "name": names.get(r.get("unitid", r.get("school_id")))} if not r.get("name") else r
+            for r in rows]
+
+
 def answer_question(question: str) -> tuple[AskResponse, list[dict], str]:
     """The answer, the rows behind it, and the SQL or tool call that produced them."""
     answer = plan_answer(question)
@@ -210,7 +221,7 @@ def answer_question(question: str) -> tuple[AskResponse, list[dict], str]:
         return AskResponse(question=question, kind="clarify", response=answer.clarification), [], trace
 
     rows, notes = check_answer(question, answer.rows, answer.source)
-    rows = rows[:SUMMARY_ROW_LIMIT]
+    rows = with_school_names(rows[:SUMMARY_ROW_LIMIT])
     logger.info("Results: %d from %s", len(rows), answer.source)
     if not rows:
         return AskResponse(question=question, kind="no_results", response=NO_RESULTS_MESSAGE), [], answer.source
