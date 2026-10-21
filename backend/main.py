@@ -448,7 +448,22 @@ def privacy_page():
 
 @app.get("/")
 def home():
-    index_path = FRONTEND_DIR / "index.html"
-    if not index_path.exists():
-        raise HTTPException(status_code=404, detail="Frontend not found")
-    return FileResponse(index_path)
+    """Landing page; it forwards signed-in visitors to /chat in the browser."""
+    return _page("landing.html")
+
+
+@app.get("/chat")
+def chat_page():
+    return _page("chat.html")
+
+
+@app.get("/api/stats")
+def site_stats():
+    """Numbers shown on the landing page."""
+    counts = execute_sql(
+        "SELECT (SELECT count(*) FROM schools WHERE year = (SELECT max(year) FROM schools)) AS schools, "
+        "(SELECT count(*) FROM copilot_scores) AS ranked, "
+        "(SELECT count(*) FROM school_deadlines) AS deadlines, "
+        "(SELECT count(DISTINCT unitid) FROM school_deadlines) AS deadline_schools"
+    )[0]
+    return counts

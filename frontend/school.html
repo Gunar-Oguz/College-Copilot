@@ -188,7 +188,7 @@
         <button type="button" class="save-pill" data-school-id="${p.id}" aria-pressed="${saved}">${saved ? "♥ Saved" : "♡ Save"}</button>
         ${p.website ? `<a class="pill" href="${escapeHtml(p.website)}" target="_blank" rel="noopener">Official website ↗</a>` : ""}
         <a class="pill" href="/compare?ids=${p.id}">⚖ Compare</a>
-        <a class="pill" href="/?q=${encodeURIComponent(`Find 5 schools similar to ${p.name}`)}">Similar schools</a>
+        <a class="pill" href="/chat?q=${encodeURIComponent(`Find 5 schools similar to ${p.name}`)}">Similar schools</a>
       </div>
       ${tags ? `<div class="tags">${tags}</div>` : ""}`;
     }
@@ -303,7 +303,7 @@
       root.innerHTML = renderHero(profile) + renderScore(profile) + renderStats(profile) + renderDeadlines(profile)
         + renderMajors(profile) + renderSafety(profile) + renderReviews(profile)
         + `<p class="muted small">Sources: College Scorecard, IPEDS, Clery Act data, user reviews.
-           <a href="/?q=${encodeURIComponent(`Tell me about ${profile.name}`)}">Ask a question about this school →</a></p>`;
+           <a href="/chat?q=${encodeURIComponent(`Tell me about ${profile.name}`)}">Ask a question about this school →</a></p>`;
     }
 
     async function loadProfile() {
@@ -313,7 +313,7 @@
         profile = await res.json();
         render();
       } catch (err) {
-        root.innerHTML = `<div class="panel"><h3>${escapeHtml(err.message)}</h3><p><a href="/">← Back to search</a></p></div>`;
+        root.innerHTML = `<div class="panel"><h3>${escapeHtml(err.message)}</h3><p><a href="/chat">← Back to search</a></p></div>`;
       }
     }
 
@@ -375,7 +375,7 @@
     window.onAuthChanged = () => loadMyReview();
 
     if (!Number.isInteger(schoolId)) {
-      root.innerHTML = `<div class="panel"><h3>We couldn't find that school.</h3><p><a href="/">← Back to search</a></p></div>`;
+      root.innerHTML = `<div class="panel"><h3>We couldn't find that school.</h3><p><a href="/chat">← Back to search</a></p></div>`;
     } else {
       loadProfile();
       initAuth();

@@ -32,7 +32,8 @@ college_cop/
 ├── data/                      # Schema SQL, curated aliases; downloads (gitignored)
 ├── docs/DATA_SOURCES.md       # Every source table and column
 ├── evals/                     # Question set with known answers + scorer
-├── frontend/index.html        # Chat interface
+├── frontend/landing.html      # Landing page at / (signed-in visitors go to /chat)
+├── frontend/chat.html         # Chat interface at /chat
 └── tests/
 ```
 
@@ -97,7 +98,7 @@ cd backend
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open **http://localhost:8000** — chat page and API on one URL.
+Open **http://localhost:8000** for the landing page, or **/chat** for the chat. The API is on the same URL.
 
 ## Testing
 
