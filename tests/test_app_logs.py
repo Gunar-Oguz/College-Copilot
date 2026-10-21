@@ -18,6 +18,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 import app_logs  # noqa: E402
 import main  # noqa: E402
+import plans  # noqa: E402
 from database import UnsafeQueryError, execute_sql, get_db_connection, run_readonly_query  # noqa: E402
 
 MARKER = "[pytest] "
@@ -38,6 +39,7 @@ def _cleanup():
     with get_db_connection() as conn, conn.cursor() as cursor:
         cursor.execute("DELETE FROM feedback WHERE question LIKE %s", (MARKER + "%",))
         cursor.execute("DELETE FROM query_logs WHERE question LIKE %s", (MARKER + "%",))
+        cursor.execute("DELETE FROM usage_tracking WHERE user_id LIKE 'pytest:%'")
 
 
 @pytest.fixture
@@ -46,7 +48,9 @@ def client(monkeypatch):
         response = main.AskResponse(question=question, kind="result", response="UCLA's graduation rate is 93.0%.")
         return response, [{"id": 110662, "name": "UCLA"}], "SELECT completion_rate FROM schools"
     monkeypatch.setattr(main, "answer_question", fake_answer)
+    monkeypatch.setattr(plans, "visitor_id", lambda ip: "pytest:visitor")
     app_logs.ensure_log_tables()
+    plans.ensure_plan_tables()
     _cleanup()
     yield TestClient(main.app)
     _cleanup()

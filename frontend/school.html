@@ -89,7 +89,49 @@
     .review-form textarea { width: 100%; min-height: 90px; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
     .review-form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
+    .fit-chance {
+      display: inline-block;
+      font-weight: 800;
+      font-size: 0.85rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: var(--brand-soft);
+      color: var(--brand-dark);
+      align-self: flex-start;
+    }
+    .fit-chance-likely { background: #d1fae5; color: #065f46; }
+    .fit-chance-reach { background: #ffe4e6; color: #9f1239; }
+    .fit-summary { line-height: 1.55; }
+    .fit-checks { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .fit-checks li { display: flex; gap: 10px; align-items: flex-start; font-size: 0.9rem; line-height: 1.45; }
+    .fit-mark { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; flex-shrink: 0; font-size: 0.8rem; }
+    .fit-good .fit-mark { background: #d1fae5; color: #065f46; }
+    .fit-okay .fit-mark { background: #e0e7ff; color: #3730a3; }
+    .fit-concern .fit-mark { background: #fee2e2; color: #991b1b; }
+    .fit-unknown .fit-mark { background: #f3f4f6; color: #6b7280; }
+    #fit-body { display: flex; flex-direction: column; gap: 10px; }
+    .profile-form { display: flex; flex-direction: column; gap: 12px; }
+    .profile-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .profile-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; font-weight: 600; }
+    .profile-grid input, .profile-grid select, .add-item-form input {
+      font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; width: 100%;
+    }
+    .profile-form button, .add-item-form button { align-self: flex-start; }
+    details.checklist summary { cursor: pointer; }
+    details.checklist .progress { color: var(--muted); font-size: 0.8rem; margin-left: 6px; }
+    .check-items { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 8px; }
+    .check-items li { display: flex; gap: 8px; align-items: flex-start; font-size: 0.9rem; }
+    .check-items label { display: flex; gap: 8px; flex: 1; cursor: pointer; line-height: 1.4; }
+    .check-items input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--brand); flex-shrink: 0; }
+    .check-items li.done span { color: var(--muted); text-decoration: line-through; }
+    .check-items .link-btn { color: var(--muted); text-decoration: none; font-size: 1rem; }
+    .add-item-form { display: flex; gap: 8px; }
+    .add-item-form input { flex: 1; }
+
     @media (max-width: 640px) {
+      .profile-grid { grid-template-columns: 1fr 1fr; }
       .hero { min-height: 190px; }
       .hero h2 { font-size: 1.35rem; }
       .score-card { grid-template-columns: 1fr; justify-items: center; }
@@ -241,7 +283,10 @@
       const cycle = p.deadlines[0].cycle ? ` (${escapeHtml(p.deadlines[0].cycle)})` : "";
       return `<section class="panel"><h3>Application deadlines${cycle}</h3>
         <div class="table-wrap"><table><thead><tr><th>Type</th><th>Deadline</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div>
-        <p class="muted small">Always confirm on the school's admissions site before applying.</p></section>`;
+        <div class="panel-head">
+          <p class="muted small">Always confirm on the school's admissions site before applying.</p>
+          <button type="button" class="pill" id="add-calendar">${isPro() ? "" : "🔒 "}📅 Add to calendar</button>
+        </div></section>`;
     }
 
     function renderMajors(p) {
@@ -292,23 +337,115 @@
         : `<p class="muted">No reviews yet. Be the first to share what it's like.</p>`;
       const list = r.recent.map(x => `<div class="review">${stars(x.rating)}<span class="when">${escapeHtml(fmt.date(x.created_at))}</span>
           ${x.review_text ? `<p>${escapeHtml(x.review_text)}</p>` : ""}</div>`).join("");
+      const locked = r.locked
+        ? `<div class="locked-feature"><span class="lock">🔒</span><span><b>${r.locked} more review${r.locked === 1 ? "" : "s"}</b> with Pro</span>
+             <a href="/pricing">Upgrade</a></div>`
+        : "";
       return `<section class="panel" id="reviews"><div class="panel-head"><h3>Reviews</h3>
           <button type="button" class="pill" id="write-review">${myReview ? "Edit your review" : "Write a review"}</button></div>
-        ${summary}<div id="review-form-slot"></div><div>${list}</div>
+        ${summary}<div id="review-form-slot"></div><div>${list}</div>${locked}
       </section>`;
+    }
+
+    // ---------- "Why this school?" and checklist (Pro) ----------
+
+    const FIT_STATUS = { good: "✓", okay: "•", concern: "!", unknown: "?" };
+
+    function renderFitPanel() {
+      if (!isPro()) {
+        return `<section class="panel"><h3>Why this school? <span class="pro-badge">PRO</span></h3>
+          <div class="locked-feature"><span class="lock">🔒</span>
+            <span>See your admission chances, cost for your family and how your major fits, based on your profile.</span>
+            <a href="/pricing">Upgrade</a></div></section>`;
+      }
+      return `<section class="panel" id="fit"><div class="panel-head"><h3>Why this school? <span class="pro-badge">PRO</span></h3>
+          <button type="button" class="link-btn" id="edit-profile">Edit my profile</button></div>
+        <div id="fit-body"><p class="muted">Analyzing your fit...</p></div></section>`;
+    }
+
+    function profileForm(p) {
+      const v = key => (p[key] ?? "") === null ? "" : escapeHtml(String(p[key] ?? ""));
+      const sizes = ["any", "small", "medium", "large"].map(size =>
+        `<option value="${size}" ${p.preferred_size === size ? "selected" : ""}>${size === "any" ? "No preference" : size[0].toUpperCase() + size.slice(1)}</option>`).join("");
+      return `<form class="profile-form" id="profile-form">
+          <p class="muted small">Used only for your fit analysis. All fields are optional.</p>
+          <div class="profile-grid">
+            <label>SAT (400-1600)<input name="sat" type="number" min="400" max="1600" value="${v("sat")}"></label>
+            <label>ACT (1-36)<input name="act" type="number" min="1" max="36" value="${v("act")}"></label>
+            <label>GPA<input name="gpa" type="number" step="0.01" min="0" max="5" value="${v("gpa")}"></label>
+            <label>Family income ($/yr)<input name="family_income" type="number" min="0" step="1000" value="${v("family_income")}"></label>
+            <label>Budget ($/yr after aid)<input name="budget" type="number" min="0" step="500" value="${v("budget")}"></label>
+            <label>Home state<input name="home_state" maxlength="2" placeholder="CA" value="${v("home_state")}"></label>
+            <label>Intended major<input name="intended_major" maxlength="100" placeholder="Computer Science" value="${v("intended_major")}"></label>
+            <label>Preferred size<select name="preferred_size">${sizes}</select></label>
+          </div>
+          <button type="submit">Save and analyze</button>
+        </form>`;
+    }
+
+    let fitCache = null;  // one AI analysis per page view, until the profile changes
+
+    async function loadFit() {
+      const body = document.getElementById("fit-body");
+      if (!body) return;
+      if (fitCache) { body.innerHTML = fitCache; return; }
+      try {
+        const fit = await api(`/me/fit/${schoolId}`);
+        if (!fit.profile_complete) {
+          const { profile: p } = await api("/me/profile");
+          body.innerHTML = `<p>Tell us a bit about you to see how ${escapeHtml(profile.name)} fits.</p>${profileForm(p)}`;
+          return;
+        }
+        const checks = fit.checks.map(c => `<li class="fit-${c.status}"><span class="fit-mark" aria-hidden="true">${FIT_STATUS[c.status]}</span>
+            <span><b>${escapeHtml(c.area)}${c.label ? `: ${escapeHtml(c.label)}` : ""}</b> ${escapeHtml(c.detail)}</span></li>`).join("");
+        body.innerHTML = `<div class="fit-chance fit-chance-${escapeHtml(fit.chance.toLowerCase())}">${escapeHtml(fit.chance)}</div>
+          ${fit.summary ? `<p class="fit-summary">${escapeHtml(fit.summary)}</p>` : ""}
+          <ul class="fit-checks">${checks}</ul>
+          <p class="muted small">Based on your profile and public data. Admission decisions depend on much more than numbers.</p>`;
+        fitCache = body.innerHTML;
+      } catch (err) {
+        body.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    function renderChecklistPanel() {
+      if (!isPro()) return "";
+      return `<section class="panel"><details class="checklist" id="checklist">
+          <summary><b>My application checklist</b> <span class="progress"></span></summary>
+          <div class="checklist-body"><p class="muted">Loading...</p></div></details></section>`;
+    }
+
+    async function loadChecklist() {
+      const details = document.getElementById("checklist");
+      if (!details) return;
+      try {
+        const { items } = await api(`/me/checklist/${schoolId}`);
+        const done = items.filter(i => i.done).length;
+        details.querySelector(".progress").textContent = `${done}/${items.length} done`;
+        details.querySelector(".checklist-body").innerHTML = `<ul class="check-items">${items.map(i => `
+            <li data-item-id="${i.id}" class="${i.done ? "done" : ""}"><label><input type="checkbox" class="check-item" ${i.done ? "checked" : ""}>
+              <span>${escapeHtml(i.item_text)}</span></label>
+              <button type="button" class="link-btn delete-item" aria-label="Delete item">×</button></li>`).join("")}</ul>
+          <form class="add-item-form" id="add-item-form"><input maxlength="300" placeholder="Add a step" aria-label="New checklist item">
+            <button type="submit">Add</button></form>`;
+      } catch (err) { handleError(err); }
     }
 
     function render() {
       document.title = `${profile.name} · CollegeCopilot`;
-      root.innerHTML = renderHero(profile) + renderScore(profile) + renderStats(profile) + renderDeadlines(profile)
+      root.innerHTML = renderHero(profile) + renderScore(profile) + renderFitPanel() + renderStats(profile)
+        + renderDeadlines(profile) + renderChecklistPanel()
         + renderMajors(profile) + renderSafety(profile) + renderReviews(profile)
         + `<p class="muted small">Sources: College Scorecard, IPEDS, Clery Act data, user reviews.
            <a href="/chat?q=${encodeURIComponent(`Tell me about ${profile.name}`)}">Ask a question about this school →</a></p>`;
+      loadFit();
     }
 
     async function loadProfile() {
       try {
-        const res = await fetch(`/api/school/${schoolId}`);
+        const res = await fetch(`/api/school/${schoolId}`, {
+          headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+        });
         if (!res.ok) throw new Error(res.status === 404 ? "We couldn't find that school." : "Couldn't load this school.");
         profile = await res.json();
         render();
@@ -372,7 +509,59 @@
         btn.textContent = saved ? "♥ Saved" : "♡ Save";
       });
     };
-    window.onAuthChanged = () => loadMyReview();
+    // Reload with the user's plan (Pro sees all reviews and the fit analysis).
+    window.onAuthChanged = async () => { fitCache = null; await loadProfile(); await loadMyReview(); };
+
+    root.addEventListener("click", event => {
+      if (event.target.closest("#add-calendar")) {
+        downloadFile(`/me/deadlines.ics?unitid=${schoolId}`, `${profile.name.replace(/[^\w]+/g, "-")}-deadlines.ics`);
+      }
+      if (event.target.closest("#edit-profile")) {
+        api("/me/profile").then(({ profile: p }) => {
+          document.getElementById("fit-body").innerHTML = profileForm(p);
+        }).catch(handleError);
+      }
+      const del = event.target.closest(".delete-item");
+      if (del) {
+        api(`/me/checklist/items/${del.closest("li").dataset.itemId}`, { method: "DELETE" }).then(loadChecklist).catch(handleError);
+      }
+    });
+    root.addEventListener("toggle", event => {
+      if (event.target.id === "checklist" && event.target.open) loadChecklist();
+    }, true);
+    root.addEventListener("change", event => {
+      if (!event.target.matches(".check-item")) return;
+      api(`/me/checklist/items/${event.target.closest("li").dataset.itemId}`, {
+        method: "PUT", body: JSON.stringify({ done: event.target.checked }),
+      }).then(loadChecklist).catch(err => { event.target.checked = !event.target.checked; handleError(err); });
+    });
+    root.addEventListener("submit", async event => {
+      if (event.target.id === "add-item-form") {
+        event.preventDefault();
+        const input = event.target.querySelector("input");
+        if (!input.value.trim()) return;
+        try {
+          await api(`/me/checklist/${schoolId}`, { method: "POST", body: JSON.stringify({ item_text: input.value.trim() }) });
+          loadChecklist();
+        } catch (err) { handleError(err); }
+      }
+      if (event.target.id === "profile-form") {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(event.target));
+        const body = {};
+        for (const [key, value] of Object.entries(data)) {
+          if (value === "" || value === "any") continue;
+          body[key] = ["sat", "act", "family_income", "budget"].includes(key) ? Number(value)
+            : key === "gpa" ? Number(value) : value;
+        }
+        try {
+          await api("/me/profile", { method: "PUT", body: JSON.stringify(body) });
+          fitCache = null;
+          document.getElementById("fit-body").innerHTML = `<p class="muted">Analyzing your fit...</p>`;
+          loadFit();
+        } catch (err) { handleError(err); }
+      }
+    });
 
     if (!Number.isInteger(schoolId)) {
       root.innerHTML = `<div class="panel"><h3>We couldn't find that school.</h3><p><a href="/chat">← Back to search</a></p></div>`;

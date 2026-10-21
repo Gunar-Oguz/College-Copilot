@@ -88,7 +88,7 @@ def school_basics(ids: list[int]) -> list[dict]:
     return [rows[i] for i in ids if i in rows]
 
 
-def school_profile(unitid: int) -> dict | None:
+def school_profile(unitid: int, review_limit: int = 10) -> dict | None:
     found = school_basics([unitid])
     if not found:
         return None
@@ -113,7 +113,7 @@ def school_profile(unitid: int) -> dict | None:
         r["designation"] for r in execute_sql(
             "SELECT DISTINCT designation FROM school_designations WHERE school_id = %s ORDER BY 1", (unitid,))
     ] if _table_exists("school_designations") else []
-    profile["reviews"] = review_summary(unitid)
+    profile["reviews"] = review_summary(unitid, limit=review_limit)
     profile["photo"] = get_photo(unitid)
     return profile
 

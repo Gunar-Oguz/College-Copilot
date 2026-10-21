@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Pricing · CollegeCopilot</title>
+  <meta name="description" content="CollegeCopilot is free to start. Pro is $9/month for unlimited AI questions, a deadline calendar, fit analysis and more.">
+  <link rel="stylesheet" href="/static/common.css">
+  <link rel="stylesheet" href="/static/pages.css">
+  <style>
+    .pricing-main { max-width: 1000px; }
+    .intro { text-align: center; padding: 18px 0 6px; }
+    .intro h2 { font-size: clamp(1.9rem, 4.5vw, 2.7rem); letter-spacing: -0.04em; text-wrap: balance; }
+    .intro p { color: var(--muted); font-size: 1.08rem; margin-top: 10px; }
+    .banner { border-radius: 14px; padding: 14px 18px; font-size: 0.95rem; display: flex; gap: 10px; align-items: center; }
+    .banner.ok { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .banner.info { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+    .banner[hidden] { display: none; }
+
+    .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: stretch; margin-top: 8px; }
+    .plan-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      position: relative;
+    }
+    .plan-card.pro {
+      border: 2px solid var(--brand);
+      box-shadow: 0 24px 60px rgba(59, 63, 216, 0.18);
+      background: linear-gradient(180deg, #fbfbff, #fff 40%);
+    }
+    .ribbon {
+      position: absolute;
+      top: -13px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(120deg, #f59e0b, #fcd34d);
+      color: var(--brand-dark);
+      font-weight: 800;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      padding: 5px 12px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .plan-name { font-size: 1.15rem; font-weight: 750; display: flex; align-items: center; gap: 8px; }
+    .price { display: flex; align-items: baseline; gap: 6px; }
+    .price b { font-size: 3rem; letter-spacing: -0.04em; line-height: 1; }
+    .price span { color: var(--muted); }
+    .plan-desc { color: var(--muted); font-size: 0.92rem; line-height: 1.5; margin-top: -8px; }
+    .features { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; font-size: 0.93rem; }
+    .features li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.4; }
+    .features .yes { color: #059669; font-weight: 800; flex-shrink: 0; width: 18px; }
+    .features .no { flex-shrink: 0; width: 18px; font-size: 0.85rem; }
+    .features li.locked { color: #9aa0ae; }
+    .plan-cta {
+      margin-top: auto;
+      display: block;
+      width: 100%;
+      text-align: center;
+      padding: 14px;
+      border-radius: 14px;
+      font: inherit;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
+    }
+    .plan-cta.primary { background: var(--brand); color: #fff; box-shadow: 0 10px 26px rgba(59, 63, 216, 0.3); }
+    .plan-cta.primary:hover:not(:disabled) { background: #2f33c4; }
+    .plan-cta.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+    .plan-cta:disabled { opacity: 0.6; cursor: default; box-shadow: none; }
+    .plan-status { font-size: 0.85rem; color: var(--muted); text-align: center; }
+    .plan-links { display: flex; justify-content: center; gap: 16px; font-size: 0.85rem; }
+    .plan-links button { background: none; border: none; color: var(--brand); font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
+    .plan-links button.danger { color: #be123c; }
+    .fine { text-align: center; font-size: 0.8rem; color: var(--muted); }
+    .plan-links[hidden], .plan-status[hidden], .plan-links button[hidden] { display: none; }
+
+    .compare-table th:not(:first-child), .compare-table td:not(:first-child) { text-align: center; width: 120px; }
+    .compare-table td.yes { color: #059669; font-weight: 800; }
+    .compare-table thead th:last-child { color: var(--brand); }
+    .faq details { border-top: 1px solid var(--border); padding: 12px 0; }
+    .faq details:first-of-type { border-top: none; }
+    .faq summary { cursor: pointer; font-weight: 600; }
+    .faq p { color: #374151; margin-top: 8px; line-height: 1.6; font-size: 0.93rem; }
+
+    @media (max-width: 760px) {
+      .plans { grid-template-columns: 1fr; }
+      .plan-card.pro { order: -1; }
+      .plan-card { padding: 22px; }
+    }
+  </style>
+</head>
+<body class="page">
+  <header>
+    <div class="header-inner">
+      <a href="/" class="brand" aria-label="CollegeCopilot home">
+        <svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+          <rect width="40" height="40" rx="11" fill="#ffffff" fill-opacity="0.14"/>
+          <rect x="0.5" y="0.5" width="39" height="39" rx="10.5" fill="none" stroke="#ffffff" stroke-opacity="0.3"/>
+          <path d="M20 9 L34 16 L20 23 L6 16 Z" fill="#ffffff"/>
+          <path d="M12 19.5 V26 C12 28.8 16 31 20 31 C24 31 28 28.8 28 26 V19.5 L20 23.5 Z" fill="#ffffff" fill-opacity="0.85"/>
+          <path d="M31 17.5 V25" stroke="#fcd34d" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="31" cy="26.5" r="2" fill="#fcd34d"/>
+        </svg>
+        <h1>College<span class="accent">Copilot</span></h1>
+      </a>
+      <div class="account">
+        <a class="header-btn" href="/chat">Ask a question</a>
+        <div id="signed-out" class="account" hidden>
+          <button type="button" class="header-btn" data-auth="signin">Sign in</button>
+        </div>
+        <div id="signed-in" class="account" hidden></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-main pricing-main">
+    <div class="banner ok" id="success-banner" hidden role="status"></div>
+    <div class="banner info" id="cancel-banner" hidden role="status">Checkout was cancelled. You haven't been charged, and you can upgrade any time.</div>
+
+    <div class="intro">
+      <h2>Simple pricing for your college search</h2>
+      <p>Start free. Upgrade when you need more.</p>
+    </div>
+
+    <div class="plans">
+      <section class="plan-card" aria-labelledby="free-title">
+        <div class="plan-name" id="free-title">Free</div>
+        <div class="price"><b>$0</b><span>forever</span></div>
+        <p class="plan-desc">Everything you need to start exploring colleges.</p>
+        <ul class="features">
+          <li><span class="yes">✓</span>10 AI questions per day</li>
+          <li><span class="yes">✓</span>Basic school search</li>
+          <li><span class="yes">✓</span>View school profiles</li>
+          <li><span class="yes">✓</span>Save up to 3 schools</li>
+          <li><span class="yes">✓</span>Compare up to 3 schools</li>
+          <li class="locked"><span class="no" aria-label="Pro only">🔒</span>Deadline tracker with calendar export</li>
+          <li class="locked"><span class="no" aria-label="Pro only">🔒</span>"Why this school?" fit analysis</li>
+          <li class="locked"><span class="no" aria-label="Pro only">🔒</span>Application checklists</li>
+          <li class="locked"><span class="no" aria-label="Pro only">🔒</span>Export school lists to CSV</li>
+          <li class="locked"><span class="no" aria-label="Pro only">🔒</span>All student reviews</li>
+        </ul>
+        <button type="button" class="plan-cta secondary" id="free-cta">Start free</button>
+      </section>
+
+      <section class="plan-card pro" aria-labelledby="pro-title">
+        <span class="ribbon">MOST POPULAR</span>
+        <div class="plan-name" id="pro-title">Pro <span class="pro-badge big">PRO</span></div>
+        <div class="price"><b>$9</b><span>/ month</span></div>
+        <p class="plan-desc">For serious applicants building and tracking their college list.</p>
+        <ul class="features">
+          <li><span class="yes">✓</span><span><b>Unlimited</b> AI questions</span></li>
+          <li><span class="yes">✓</span>Save unlimited schools to your portfolio</li>
+          <li><span class="yes">✓</span>Compare up to 10 schools side by side</li>
+          <li><span class="yes">✓</span>Deadline tracker with calendar export (.ics)</li>
+          <li><span class="yes">✓</span>Access all student reviews</li>
+          <li><span class="yes">✓</span>"Why this school?" personalized fit analysis</li>
+          <li><span class="yes">✓</span>Export school lists to CSV</li>
+          <li><span class="yes">✓</span>Application checklist for every school</li>
+          <li><span class="yes">✓</span>Priority response queue</li>
+          <li><span class="yes">✓</span>Early access to new features</li>
+        </ul>
+        <button type="button" class="plan-cta primary" id="pro-cta">Upgrade to Pro</button>
+        <p class="plan-status" id="pro-status" hidden></p>
+        <div class="plan-links" id="pro-links" hidden>
+          <button type="button" id="manage-billing">Manage billing</button>
+          <button type="button" class="danger" id="cancel-sub">Cancel subscription</button>
+        </div>
+        <p class="fine">Cancel anytime. Secure payment by Stripe.</p>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h3>Compare plans</h3>
+      <div class="table-wrap">
+        <table class="compare-table">
+          <thead><tr><th>Feature</th><th>Free</th><th>Pro</th></tr></thead>
+          <tbody>
+            <tr><td>AI questions</td><td>10 / day</td><td class="yes">Unlimited</td></tr>
+            <tr><td>School search and profiles</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+            <tr><td>Saved schools</td><td>3</td><td class="yes">Unlimited</td></tr>
+            <tr><td>Side-by-side compare</td><td>3 schools</td><td class="yes">10 schools</td></tr>
+            <tr><td>Student reviews</td><td>Latest 2 per school</td><td class="yes">All</td></tr>
+            <tr><td>Deadline calendar (.ics)</td><td>🔒</td><td class="yes">✓</td></tr>
+            <tr><td>"Why this school?" fit analysis</td><td>🔒</td><td class="yes">✓</td></tr>
+            <tr><td>Application checklists</td><td>🔒</td><td class="yes">✓</td></tr>
+            <tr><td>CSV export</td><td>🔒</td><td class="yes">✓</td></tr>
+            <tr><td>Priority response queue</td><td>🔒</td><td class="yes">✓</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel faq">
+      <h3>Questions</h3>
+      <details><summary>Can I cancel anytime?</summary>
+        <p>Yes. Cancel from this page or the billing portal. You keep Pro until the end of the month you paid for, then
+          move back to Free. Your saved schools stay, but you'll only be able to add more while you have fewer than 3.</p></details>
+      <details><summary>When do free questions reset?</summary>
+        <p>Every day at midnight UTC (7 or 8 pm Eastern, depending on daylight saving time).</p></details>
+      <details><summary>What does "priority response queue" mean?</summary>
+        <p>When many people are asking questions at once, Pro questions are answered first.</p></details>
+      <details><summary>Is my payment information safe?</summary>
+        <p>Payments are handled by Stripe. CollegeCopilot never sees or stores your card number.</p></details>
+      <details><summary>Where does the data come from?</summary>
+        <p>Official public sources such as the U.S. Department of Education's College Scorecard and IPEDS, the
+          Bureau of Labor Statistics and Opportunity Insights. Always confirm important details with each school.</p></details>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a href="/terms">Terms of Service</a>
+    <a href="/privacy">Privacy Policy</a>
+    <span>© 2026 CollegeCopilot</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+  <script src="/static/auth.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const proCta = document.getElementById("pro-cta");
+    const freeCta = document.getElementById("free-cta");
+    let wantsCheckout = false;  // signed-out visitor clicked Upgrade: continue to checkout after sign-in
+
+    function formatDay(value) {
+      return value ? new Date(value).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }) : "";
+    }
+
+    function render() {
+      const pro = isPro();
+      const status = document.getElementById("pro-status");
+      document.getElementById("pro-links").hidden = !pro;
+      status.hidden = !pro;
+      if (pro) {
+        proCta.textContent = "You're on Pro";
+        proCta.disabled = true;
+        status.textContent = plan.cancel_at_period_end
+          ? `Your Pro plan ends on ${formatDay(plan.current_period_end)}. Renew any time from Manage billing.`
+          : plan.current_period_end ? `Renews on ${formatDay(plan.current_period_end)}.` : "";
+        document.getElementById("cancel-sub").hidden = plan.cancel_at_period_end;
+        freeCta.textContent = "Included in Pro";
+        freeCta.disabled = true;
+      } else {
+        proCta.disabled = plan.payments_enabled === false;
+        proCta.textContent = plan.payments_enabled === false ? "Payments coming soon" : "Upgrade to Pro";
+        freeCta.textContent = session ? "Your current plan" : "Start free";
+        freeCta.disabled = Boolean(session);
+      }
+    }
+
+    async function startCheckout() {
+      proCta.disabled = true;
+      proCta.textContent = "Opening secure checkout...";
+      try {
+        const { url } = await api("/api/create-checkout-session", { method: "POST" });
+        location.href = url;
+      } catch (err) {
+        handleError(err);
+        render();
+      }
+    }
+
+    proCta.addEventListener("click", () => {
+      if (!session) {
+        wantsCheckout = true;
+        openAuth("signup", "Create a free account first, then you'll continue to secure checkout.");
+        return;
+      }
+      startCheckout();
+    });
+    freeCta.addEventListener("click", () => {
+      if (!session) openAuth("signup", "Create your free account.");
+    });
+    document.getElementById("manage-billing").addEventListener("click", openBillingPortal);
+    document.getElementById("cancel-sub").addEventListener("click", async () => {
+      if (!confirm("Cancel Pro? You'll keep Pro until the end of your current billing period.")) return;
+      try {
+        plan = { ...plan, ...(await api("/api/cancel-subscription", { method: "POST" })) };
+        showToast("Your subscription will end at the end of this billing period.");
+        render();
+      } catch (err) { handleError(err); }
+    });
+
+    // Back from Stripe Checkout: refresh the plan from Stripe until Pro shows up (the webhook may lag).
+    let confirming = false;
+    async function confirmUpgrade() {
+      if (confirming) return;
+      confirming = true;
+      const banner = document.getElementById("success-banner");
+      banner.hidden = false;
+      banner.textContent = "Payment received! Activating Pro...";
+      for (let attempt = 0; attempt < 8 && session; attempt++) {
+        const res = await fetch("/api/subscription?sync=true", { headers: { Authorization: `Bearer ${session.access_token}` } });
+        if (res.ok) plan = await res.json();
+        if (isPro()) break;
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      updatePlanUI();
+      banner.textContent = isPro()
+        ? "🎉 Welcome to Pro! Unlimited questions and every Pro tool are now unlocked."
+        : "Payment received. Pro will be active in a moment. Refresh this page if it doesn't show.";
+      history.replaceState(null, "", "/pricing");
+      render();
+    }
+
+    window.onPlanChanged = render;
+    window.onAuthChanged = () => {
+      render();
+      if (session && params.get("success") === "true") confirmUpgrade();
+      if (session && wantsCheckout && !isPro()) {
+        wantsCheckout = false;
+        startCheckout();
+      }
+    };
+    if (params.get("cancelled") === "true") {
+      document.getElementById("cancel-banner").hidden = false;
+      history.replaceState(null, "", "/pricing");
+    }
+    initAuth().then(render);
+  </script>
+</body>
+</html>
