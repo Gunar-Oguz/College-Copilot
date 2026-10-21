@@ -7,7 +7,7 @@ import re
 from decimal import ROUND_HALF_UP, Decimal
 
 HIDDEN_COLUMNS = {"id", "school_id", "role", "year", "latitude", "longitude"}
-TEXT_COLUMNS = {"name", "city", "state", "program_name", "credential_name", "cip_code", "school_url"}
+TEXT_COLUMNS = {"name", "title", "soc_code", "city", "state", "program_name", "credential_name", "cip_code", "school_url"}
 MAX_BARS = 25
 MAX_COMPARE_SCHOOLS = 6
 MIN_COMPARE_METRICS = 2
@@ -121,7 +121,7 @@ def _visible_columns(rows: list[dict], highlight: str | None) -> list[str]:
     keys = [k for k in _all_keys(rows) if k not in HIDDEN_COLUMNS]
     if len({r.get("year") for r in rows}) > 1:
         keys.insert(0, "year")
-    ordered = [k for k in ("name", "state") if k in keys]
+    ordered = [k for k in ("name", "title", "state") if k in keys]
     if highlight in keys and highlight not in ordered:
         ordered.append(highlight)
     return ordered + [k for k in keys if k not in ordered]
@@ -138,7 +138,7 @@ def _metric_columns(rows: list[dict], columns: list[str]) -> list[str]:
 
 
 def _label_for_row(row: dict) -> str:
-    return str(row.get("name") or row.get("program_name") or row.get("state") or "Result")
+    return str(row.get("name") or row.get("program_name") or row.get("title") or row.get("state") or "Result")
 
 
 def _stats_block(row: dict, columns: list[str]) -> dict:
