@@ -60,6 +60,14 @@ QUICK_REPLIES = [
     {"label": "💻 Specific major", "question": "Help me find the best colleges for a specific major"},
 ]
 
+AID_RE = re.compile(r"\b(?:financial\s+aid|aid|scholarships?|grants?|need[- ]based|merit|generous)\b",
+                    re.IGNORECASE)
+AID_HINT = (
+    "This question asks about financial aid, scholarships or grants. Answer it now (do not submit clarify): "
+    "aid shows up as a lower net price, so ORDER BY schools.cost_avg_net_price ASC (or the net_price_column "
+    "for a family income given in the question) and select the in-state and out-of-state tuition too."
+)
+
 UNIVERSITY_HINT = (
     "This question asks about universities or four-year colleges: when listing or ranking schools, add "
     "schools.carnegie_class BETWEEN 15 AND 23 (doctoral, master's and baccalaureate institutions)."
@@ -82,9 +90,9 @@ def is_vague(question: str) -> bool:
 
 def question_hints(question: str) -> str:
     """Scope instructions for the planner, decided from the question's wording."""
+    hints = [AID_HINT] if _asks_about_aid(question) else []
     if AGGREGATE_RE.search(question):
-        return ""
-    hints = []
+        return "\n".join(hints)
     if UNIVERSITY_RE.search(question) and SCHOOLS_MEASURE_RE.search(question):
         hints.append(UNIVERSITY_HINT)
     elif COLLEGES_RE.search(question):
@@ -154,6 +162,26 @@ def check_answer(question: str, rows: list[dict], sql: str) -> tuple[list[dict],
         elif basis:
             notes.append(RANKING_NOTE.format(basis=basis))
     return rows, notes
+
+
+AID_NOTE = ("Net price is what you pay after financial aid (grants and scholarships). "
+            "A lower net price means more aid is given.")
+
+
+def _asks_about_aid(question: str) -> bool:
+    """Aid, scholarship or grant questions (not land-grant status or Pell grant rates)."""
+    return bool(AID_RE.search(question)) and not re.search(r"land[- ]grant|\bpell\b|athletic", question, re.IGNORECASE)
+
+
+def aid_note(question: str, rows: list[dict], summary: str) -> str | None:
+    """Explain net price for aid questions, unless the summary already did."""
+    if not _asks_about_aid(question):
+        return None
+    if not any(key.startswith("cost_") and "net_price" in key for row in rows[:1] for key in row):
+        return None
+    if re.search(r"after (?:financial )?aid|after grants", summary, re.IGNORECASE):
+        return None
+    return AID_NOTE
 
 
 QUESTION_WORDS = {"what", "which", "who", "where", "when", "why", "how", "is", "are", "does", "do", "can",
