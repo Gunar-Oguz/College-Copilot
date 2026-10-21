@@ -7,17 +7,21 @@
   <title>CollegeCopilot</title>
   <style>
     :root {
-      --bg: #f0f2f8;
+      --bg: #f5f6fb;
       --surface: #ffffff;
-      --surface-2: #f6f7fa;
-      --border: #e2e8f0;
-      --text: #0f172a;
-      --muted: #64748b;
-      --primary: #007aff;
-      --user-bg: #007aff;
+      --surface-2: #f4f5fa;
+      --border: #e3e6ef;
+      --text: #111827;
+      --muted: #616a7d;
+      --brand: #3b3fd8;
+      --brand-dark: #1e1b6b;
+      --brand-soft: #eceeff;
+      --accent: #f59e0b;
+      --primary: var(--brand);
+      --user-bg: var(--brand);
       --user-text: #ffffff;
-      --ai-bg: #e9e9eb;
-      --series-1: #2a78d6;
+      --ai-bg: #eceef4;
+      --series-1: #4f55e3;
       --track: #eef1f6;
       --best-bg: #e8f5e9;
       --best-text: #1b5e20;
@@ -39,29 +43,40 @@
     }
 
     header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 20px;
-      padding-top: calc(16px + env(safe-area-inset-top, 0px));
+      background: linear-gradient(120deg, var(--brand-dark), #312e9e 60%, var(--brand));
+      color: #fff;
+      padding: 14px 20px;
+      padding-top: calc(14px + env(safe-area-inset-top, 0px));
+      flex-shrink: 0;
+      z-index: 50;
+      box-shadow: 0 2px 12px rgba(30, 27, 107, 0.25);
+    }
+
+    .header-inner {
       display: flex;
       align-items: center;
       gap: 12px;
-      flex-shrink: 0;
-      z-index: 50;
+      max-width: 880px;
+      margin: 0 auto;
     }
 
-    .logo-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
-      display: grid;
-      place-items: center;
-      font-size: 18px;
-    }
+    .logo { width: 40px; height: 40px; flex-shrink: 0; display: block; }
 
-    header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
-    header p { font-size: 0.8rem; color: var(--muted); }
+    header h1 { font-size: 1.2rem; font-weight: 750; letter-spacing: -0.02em; line-height: 1.2; }
+    header h1 .accent { color: #fcd34d; }
+    header p { font-size: 0.8rem; color: rgba(255, 255, 255, 0.78); }
+
+    .new-chat {
+      margin-left: auto;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      font-size: 0.8rem;
+      padding: 7px 12px;
+      border-radius: 999px;
+      align-self: center;
+    }
+    .new-chat:hover:not(:disabled) { background: rgba(255, 255, 255, 0.24); opacity: 1; }
 
     #chat {
       flex: 1;
@@ -81,44 +96,83 @@
     }
 
     .empty-state {
-      margin: 40px auto 0;
+      margin: 28px auto 0;
       text-align: center;
       color: var(--muted);
       font-size: 0.95rem;
-      max-width: 560px;
+      max-width: 680px;
       line-height: 1.6;
-      padding: 24px 8px;
+      padding: 8px 0 24px;
     }
 
-    .empty-state strong {
-      display: block;
+    .empty-state h2 {
       color: var(--text);
-      font-size: 1.15rem;
-      margin-bottom: 6px;
+      font-size: 1.6rem;
+      font-weight: 750;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+      margin-bottom: 8px;
+    }
+
+    .empty-state h2 span { color: var(--brand); }
+
+    .examples-label {
+      margin-top: 26px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
     }
 
     .examples {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
-      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+      text-align: left;
     }
 
     .examples button {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       background: var(--surface);
       color: var(--text);
       border: 1px solid var(--border);
       font-weight: 500;
-      font-size: 0.85rem;
-      padding: 8px 14px;
-      border-radius: 999px;
-      align-self: auto;
+      font-size: 0.9rem;
+      line-height: 1.35;
+      padding: 12px 14px;
+      border-radius: 14px;
+      align-self: stretch;
       white-space: normal;
       text-align: left;
+      box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+      transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
     }
 
-    .examples button:hover { border-color: var(--primary); opacity: 1; }
+    .examples button:hover:not(:disabled) {
+      border-color: var(--brand);
+      box-shadow: 0 4px 14px rgba(59, 63, 216, 0.14);
+      transform: translateY(-1px);
+      opacity: 1;
+    }
+
+    .examples button:focus-visible { outline: 3px solid rgba(59, 63, 216, 0.35); outline-offset: 2px; }
+
+    .example-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: var(--brand-soft);
+      display: grid;
+      place-items: center;
+      font-size: 1.05rem;
+      flex-shrink: 0;
+    }
+
+    .sources-line { margin-top: 22px; font-size: 0.78rem; }
 
     .message { display: flex; flex-direction: column; max-width: 75%; }
     .message.user { align-self: flex-end; align-items: flex-end; }
@@ -275,10 +329,14 @@
     .compare td.best { font-weight: 650; }
     .compare th:first-child, .compare td:first-child { color: var(--muted); font-weight: 500; }
 
+    /* Loading: typing dots, a status line that advances, and a skeleton answer card */
+    .message.loading { align-self: stretch; max-width: 100%; gap: 10px; }
+
     .loading-bubble {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 10px;
+      align-self: flex-start;
       color: var(--muted);
       padding: 10px 14px;
       background: var(--ai-bg);
@@ -287,17 +345,42 @@
       font-size: 0.875rem;
     }
 
-    .spinner {
-      width: 18px;
-      height: 18px;
-      border: 2px solid #dbeafe;
-      border-top-color: var(--primary);
+    .dots { display: inline-flex; gap: 4px; }
+    .dots span {
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      flex-shrink: 0;
+      background: var(--brand);
+      animation: bounce 1.2s infinite ease-in-out;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.15s; }
+    .dots span:nth-child(3) { animation-delay: 0.3s; }
+
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-5px); opacity: 1; }
     }
 
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-status { transition: opacity 0.25s; }
+
+    .skeleton { gap: 12px; }
+    .skeleton-line {
+      height: 12px;
+      border-radius: 6px;
+      background: linear-gradient(90deg, var(--surface-2) 25%, #e6e8f1 50%, var(--surface-2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite linear;
+    }
+    .skeleton-line.short { width: 55%; }
+    .skeleton-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .skeleton-tiles .skeleton-line { height: 58px; border-radius: 12px; }
+
+    @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dots span, .skeleton-line { animation: none; }
+      .examples button { transition: none; }
+    }
 
     .error-bubble {
       background: #fef2f2;
@@ -340,7 +423,7 @@
     textarea:focus {
       outline: none;
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+      box-shadow: 0 0 0 3px rgba(59, 63, 216, 0.15);
     }
 
     button {
@@ -360,35 +443,70 @@
     button:hover:not(:disabled) { opacity: 0.9; }
     button:disabled { opacity: 0.55; cursor: not-allowed; }
 
-    @media (max-width: 600px) {
+    @media (max-width: 640px) {
+      header { padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); }
+      .logo { width: 34px; height: 34px; }
+      header h1 { font-size: 1.05rem; }
+      header p { display: none; }
+      #chat { padding: 12px 12px 100px; }
+      .empty-state { margin-top: 12px; }
+      .empty-state h2 { font-size: 1.3rem; }
+      .examples { grid-template-columns: 1fr; gap: 8px; }
+      .examples button { padding: 10px 12px; font-size: 0.875rem; }
+      .example-icon { width: 30px; height: 30px; font-size: 0.95rem; }
       .message { max-width: 92%; }
-      header h1 { font-size: 1rem; }
-      .input-row > button { padding: 12px 14px; }
-      .card { padding: 14px; }
-      .bar-row { grid-template-columns: minmax(90px, 40%) 1fr auto; }
+      .card { padding: 14px 12px; gap: 14px; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .stat { padding: 10px 12px; }
+      .stat .value { font-size: 1.2rem; }
+      .bar-row { grid-template-columns: minmax(0, 42%) 1fr auto; gap: 8px; font-size: 0.8rem; }
+      .bar-row .num { min-width: 0; }
+      td:first-child { min-width: 140px; }
+      th, td { padding: 7px 10px; }
+      .table-wrap { max-height: 360px; }
+      .skeleton-tiles { grid-template-columns: repeat(2, 1fr); }
+      footer { padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+      .input-row { gap: 8px; }
+      /* 16px keeps iOS Safari from zooming into the field on focus */
+      textarea { font-size: 16px; padding: 11px 12px; }
+      .input-row > button { padding: 12px 16px; }
     }
   </style>
 </head>
 <body>
   <header>
-    <div class="logo-icon" aria-hidden="true">🎓</div>
-    <div>
-      <h1>CollegeCopilot</h1>
-      <p>Ask about U.S. colleges in plain English</p>
+    <div class="header-inner">
+      <svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+        <rect width="40" height="40" rx="11" fill="#ffffff" fill-opacity="0.14"/>
+        <rect x="0.5" y="0.5" width="39" height="39" rx="10.5" fill="none" stroke="#ffffff" stroke-opacity="0.3"/>
+        <path d="M20 9 L34 16 L20 23 L6 16 Z" fill="#ffffff"/>
+        <path d="M12 19.5 V26 C12 28.8 16 31 20 31 C24 31 28 28.8 28 26 V19.5 L20 23.5 Z" fill="#ffffff" fill-opacity="0.85"/>
+        <path d="M31 17.5 V25" stroke="#fcd34d" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="31" cy="26.5" r="2" fill="#fcd34d"/>
+      </svg>
+      <div>
+        <h1>College<span class="accent">Copilot</span></h1>
+        <p>Answers about U.S. colleges, straight from public data</p>
+      </div>
+      <button type="button" class="new-chat" id="new-chat" hidden>New chat</button>
     </div>
   </header>
 
   <main id="chat" aria-live="polite">
     <div id="messages">
       <div class="empty-state" id="empty-state">
-        <strong>Ask anything about U.S. colleges</strong>
-        Costs, admissions, graduation rates, earnings, majors, and schools like the ones you love.
+        <h2>Find the right college, <span>with real data</span></h2>
+        Costs, admissions, graduation rates, earnings, majors, careers, campus safety and more.
+        <div class="examples-label">Try asking</div>
         <div class="examples">
-          <button type="button">Find 5 schools similar to UCLA but easier to get into</button>
-          <button type="button">Compare Harvard, Yale, and Princeton on cost and earnings</button>
-          <button type="button">My family makes $85,000. Which 5 schools in California cost us the least?</button>
-          <button type="button">Which 10 schools have the highest earnings after a computer science degree?</button>
+          <button type="button"><span class="example-icon" aria-hidden="true">🎓</span><span class="example-text">What is the graduation rate at UCLA?</span></button>
+          <button type="button"><span class="example-icon" aria-hidden="true">🏆</span><span class="example-text">Top 10 universities in California by graduation rate</span></button>
+          <button type="button"><span class="example-icon" aria-hidden="true">⚖️</span><span class="example-text">Compare Harvard and Yale on cost and outcomes</span></button>
+          <button type="button"><span class="example-icon" aria-hidden="true">💼</span><span class="example-text">What jobs can a computer science major get?</span></button>
+          <button type="button"><span class="example-icon" aria-hidden="true">📈</span><span class="example-text">Which colleges have the highest economic mobility?</span></button>
+          <button type="button"><span class="example-icon" aria-hidden="true">🛡️</span><span class="example-text">Show me campus crime at UC Berkeley</span></button>
         </div>
+        <p class="sources-line">Data from College Scorecard, IPEDS, Opportunity Insights, BLS, Census and more.</p>
       </div>
     </div>
   </main>
@@ -407,6 +525,7 @@
     const emptyState = document.getElementById("empty-state");
     const questionInput = document.getElementById("question");
     const sendBtn = document.getElementById("send-btn");
+    const newChatBtn = document.getElementById("new-chat");
 
     function escapeHtml(text) {
       return String(text)
@@ -500,13 +619,38 @@
       return wrap;
     }
 
+    const LOADING_STEPS = [
+      "Understanding your question...",
+      "Searching college data...",
+      "Crunching the numbers...",
+      "Writing a summary...",
+    ];
+    let loadingTimer = null;
+
     function showLoading() {
-      const el = addMessage("ai", `<div class="loading-bubble">
-        <div class="spinner" aria-hidden="true"></div><span>Searching colleges...</span></div>`);
+      const el = addMessage("loading", `
+        <div class="loading-bubble" role="status">
+          <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span class="loading-status">${LOADING_STEPS[0]}</span>
+        </div>
+        <div class="card skeleton" aria-hidden="true">
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line short"></div>
+          <div class="skeleton-tiles"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>
+        </div>`);
       el.id = "loading-msg";
+      const status = el.querySelector(".loading-status");
+      let step = 0;
+      loadingTimer = setInterval(() => {
+        if (step >= LOADING_STEPS.length - 1) return;
+        step += 1;
+        status.style.opacity = 0;
+        setTimeout(() => { status.textContent = LOADING_STEPS[step]; status.style.opacity = 1; }, 250);
+      }, 2500);
     }
 
     function removeLoading() {
+      clearInterval(loadingTimer);
       document.getElementById("loading-msg")?.remove();
     }
 
@@ -515,10 +659,15 @@
       addMessage("ai", `<div class="error-bubble">${escapeHtml(message)}</div>`);
     }
 
+    let busy = false;
+
     async function sendQuestion(text) {
       const question = (text ?? questionInput.value).trim();
+      if (busy) return;
       if (!question) { questionInput.focus(); return; }
 
+      busy = true;
+      newChatBtn.hidden = false;
       addMessage("user", `<div class="bubble">${escapeHtml(question)}</div>`);
       questionInput.value = "";
       questionInput.style.height = "auto";
@@ -548,15 +697,25 @@
       } catch {
         showError("Could not reach the server. Make sure the backend is running.");
       } finally {
+        busy = false;
         sendBtn.disabled = false;
-        questionInput.focus();
+        // Refocusing on phones would pop the keyboard over the answer.
+        if (window.matchMedia("(hover: hover)").matches) questionInput.focus();
       }
     }
 
     sendBtn.addEventListener("click", () => sendQuestion());
 
     document.querySelectorAll(".examples button").forEach(btn =>
-      btn.addEventListener("click", () => sendQuestion(btn.textContent)));
+      btn.addEventListener("click", () => sendQuestion(btn.querySelector(".example-text").textContent)));
+
+    newChatBtn.addEventListener("click", () => {
+      if (busy) return;
+      messages.replaceChildren(emptyState);
+      newChatBtn.hidden = true;
+      history.replaceState(null, "", location.pathname);
+      chat.scrollTo({ top: 0 });
+    });
 
     questionInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {

@@ -110,7 +110,8 @@ def write_summary(question: str, rows: list[dict], context: str) -> str:
             "content": f'QUESTION: "{question}"\n\nDATA ({len(rows)} rows):\n{json.dumps(rows, default=str)}',
         }],
     )
-    summary = message.content[0].text.strip()
+    # Keep only the first paragraph: the data is shown below, so a table or list is redundant.
+    summary = message.content[0].text.strip().split("\n\n")[0].strip()
     bad = unsupported_numbers(summary, rows, f"{question} {context}")
     if bad:
         logger.warning("Summary dropped, numbers not in data: %s | %s", bad, summary)

@@ -32,6 +32,8 @@ COLUMN_NOTES = """
 - schools has one row per (id, year). id is the IPEDS UNITID. Names are NOT unique.
 - Rates (admission_rate, completion_rate, retention_rate, pell_grant_rate, etc.) are decimals 0-1, e.g. 0.25 = 25%.
 - ownership: 1 = public, 2 = private nonprofit, 3 = private for-profit.
+- When the question says "universities" or "four-year colleges", add schools.carnegie_class BETWEEN 15
+  AND 23 (doctoral, master's and baccalaureate institutions). Plain "schools" or "colleges" means all.
 - cost_avg_net_price is average annual net price. cost_net_price_income_* are net price by family
   income bracket; always get the right column from net_price_column.
 - earnings_median_10yr is median earnings 10 years after entry, in dollars.
