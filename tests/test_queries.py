@@ -79,7 +79,7 @@ class TestValidateSelect:
 
 class TestPlannerHelpers:
     def test_prompt_pins_latest_year_and_requires_submit(self):
-        prompt = build_prompt("Top 5 schools", "Table: schools", "2024-25")
+        prompt = build_prompt("Table: schools", "2024-25")
         assert "schools.year = '2024-25'" in prompt
         assert "submit_answer" in prompt
 

@@ -174,7 +174,8 @@ def net_price_column(family_income: float) -> dict:
     raise AssertionError("unreachable")
 
 
-def build_prompt(question: str, schema: str, latest_year: str) -> str:
+def build_prompt(schema: str, latest_year: str) -> str:
+    """System prompt: the same for every question, so it is cached."""
     return f"""Find the data that answers a question about U.S. colleges.
 
 SCHEMA:
@@ -202,8 +203,6 @@ RULES:
   select schools.id and schools.name plus every column used to filter or sort; exclude NULLs in
   filtered or sorted columns; add LIMIT 50 unless a number or count is asked for.
 - If a named school can't be found or the data can't answer the question, submit cannot_answer.
-
-QUESTION: "{question}"
 
 Finish by calling submit_answer."""
 
@@ -261,11 +260,17 @@ class _Session:
 
 def plan_answer(question: str) -> Answer:
     session = _Session()
-    messages = [{"role": "user", "content": build_prompt(question, get_schema(), get_latest_year())}]
+    system = [{
+        "type": "text",
+        "text": build_prompt(get_schema(), get_latest_year()),
+        "cache_control": {"type": "ephemeral"},
+    }]
+    messages = [{"role": "user", "content": f'QUESTION: "{question}"'}]
     for _ in range(MAX_TOOL_ROUNDS):
         message = _get_client().messages.create(
             model=os.getenv("CLAUDE_MODEL", "claude-haiku-4-5"),
             max_tokens=1500,
+            system=system,
             tools=TOOLS,
             tool_choice={"type": "any"},
             messages=messages,
