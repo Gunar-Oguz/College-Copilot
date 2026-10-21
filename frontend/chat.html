@@ -192,16 +192,17 @@
     .limit-card p { max-width: 520px; line-height: 1.5; }
     .limit-icon { width: 48px; height: 48px; border-radius: 14px; background: #fcd34d; display: grid; place-items: center; font-size: 1.4rem; }
     .limit-actions { width: 100%; max-width: 320px; }
-    .pro-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pro-tools { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
     .plan-hint { font-size: 0.8rem; color: var(--muted); }
     .pro-tools .plan-hint { margin-right: auto; }
     .pro-tools .plan-hint a { color: var(--brand); }
-    .tool-help { flex-basis: 100%; margin: 0; text-align: right; font-size: 0.78rem; color: var(--muted); }
+    .tool-with-help { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .tool-help { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+    @media (max-width: 600px) { .tool-with-help { align-items: flex-start; } }
     .deadlines-head { display: flex; align-items: center; justify-content: space-between; gap: 10px;
       flex-wrap: wrap; margin-bottom: 8px; }
     .deadlines-head .block-title { margin: 0; }
     .table-wrap.deadlines table { width: 100%; }
-    @media (max-width: 600px) { .tool-help { text-align: left; } }
     details.checklist { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
     details.checklist summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
     details.checklist .progress { color: var(--muted); font-weight: 500; font-size: 0.8rem; margin-left: 6px; }
@@ -945,10 +946,11 @@
         const tools = `<div class="pro-tools">
             ${limit ? `<span class="plan-hint">${list.length} of ${limit} saved on Free · <a href="/pricing">Save unlimited with Pro</a></span>`
                     : `<span class="plan-hint"><span class="pro-badge">PRO</span> Unlimited saved schools</span>`}
-            <button type="button" class="back-btn" data-action="ics">${lock}📅 Deadline calendar</button>
+            <div class="tool-with-help">
+              <button type="button" class="back-btn" data-action="ics">${lock}📅 Deadline calendar</button>
+              <span class="tool-help">Export deadlines to your calendar app</span>
+            </div>
             <button type="button" class="back-btn" data-action="csv">${lock}⬇ Export CSV</button>
-            <p class="tool-help">Download an .ics file with application deadlines for your saved schools.
-              Import into Google Calendar, Apple Calendar, or Outlook.</p>
           </div>`;
         savedView.innerHTML = savedView.querySelector(".saved-head").outerHTML + tools + body;
       } catch (err) {
