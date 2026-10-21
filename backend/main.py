@@ -436,6 +436,16 @@ def compare_page():
     return _page("compare.html")
 
 
+@app.get("/terms")
+def terms_page():
+    return _page("terms.html")
+
+
+@app.get("/privacy")
+def privacy_page():
+    return _page("privacy.html")
+
+
 @app.get("/")
 def home():
     index_path = FRONTEND_DIR / "index.html"

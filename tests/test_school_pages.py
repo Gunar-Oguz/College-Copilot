@@ -77,7 +77,7 @@ def test_profile_404(client):
 
 
 def test_pages_are_served(client):
-    for path in (f"/school/{UCLA}", "/compare", "/static/auth.js", "/static/common.css"):
+    for path in (f"/school/{UCLA}", "/compare", "/terms", "/privacy", "/static/auth.js", "/static/common.css"):
         assert client.get(path).status_code == 200
 
 
