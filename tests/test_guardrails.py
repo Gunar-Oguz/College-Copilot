@@ -102,3 +102,29 @@ def test_score_rankings_explain_the_formula():
 def test_schools_named_in(question, ids):
     from guardrails import schools_named_in
     assert schools_named_in(question) == ids
+
+
+@pytest.mark.parametrize("question, rows, summary, expected", [
+    ("Which colleges give the most financial aid?", [{"cost_avg_net_price": 5000}], "X has the lowest net price.", True),
+    ("Best scholarships in Ohio", [{"cost_net_price_income_0_30k": 900}], "Y is cheapest.", True),
+    ("Which colleges give the most financial aid?", [{"cost_avg_net_price": 5000}],
+     "X has the lowest net price, what students pay after financial aid.", False),
+    ("Cheapest colleges in Ohio", [{"cost_avg_net_price": 5000}], "X is cheapest.", False),
+    ("Which land grant universities are in Ohio?", [{"cost_avg_net_price": 5000}], "X.", False),
+    ("Schools with the most Pell grants", [{"pell_grant_rate": 0.6}], "X.", False),
+])
+def test_aid_note(question, rows, summary, expected):
+    from guardrails import AID_NOTE, aid_note
+    assert aid_note(question, rows, summary) == (AID_NOTE if expected else None)
+
+
+@pytest.mark.parametrize("question, expected", [
+    ("Which colleges give the most financial aid?", True),
+    ("Colleges in Ohio with good scholarships", True),
+    ("Which land grant universities are in Ohio?", False),
+    ("Schools with the most Pell grant students", False),
+    ("Cheapest colleges in Ohio", False),
+])
+def test_aid_questions_get_the_net_price_hint(question, expected):
+    from guardrails import AID_HINT
+    assert (AID_HINT in question_hints(question)) == expected

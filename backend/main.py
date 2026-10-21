@@ -25,7 +25,8 @@ import pro_features
 import stripe
 import user_data
 from database import execute_sql, get_data_sources, get_latest_year
-from guardrails import QUICK_REPLIES, VAGUE_MESSAGE, check_answer, is_vague, ranking_basis, schools_named_in
+from guardrails import (QUICK_REPLIES, VAGUE_MESSAGE, aid_note, check_answer, is_vague, ranking_basis,
+                        schools_named_in)
 from planner import plan_answer
 from presentation import build_blocks, unsupported_numbers
 from school_profile import compare_schools, school_basics, school_profile, search_schools
@@ -107,6 +108,9 @@ RULES:
   Never call a different school the top one, and never use reputation or outside rankings.
 - When comparing two numbers, say "up" or "higher" only if the later or named value is larger.
 - If values the question needs are null, say they are not reported.
+- If the question asks about financial aid, scholarships or grants and the data has net price, explain
+  the link in a short clause: net price is what students pay after financial aid, so a lower net price
+  means more aid. Never call net price an aid amount.
 - No advice, opinions, markdown, or lists."""
 
 NO_ANSWER_MESSAGE = (
@@ -260,10 +264,13 @@ def answer_question(question: str, history: list[dict] | None = None) -> tuple[A
         return AskResponse(question=question, kind="no_results", response=NO_RESULTS_MESSAGE), [], answer.source
 
     source = describe_sources(answer.source)
+    summary = write_summary(asked, rows, f"{source} {answer.source}", ranking_basis(answer.source))
+    if note := aid_note(asked, rows, summary):
+        notes.append(note)
     response = AskResponse(
         question=question,
         kind="result",
-        response=write_summary(asked, rows, f"{source} {answer.source}", ranking_basis(answer.source)),
+        response=summary,
         blocks=build_blocks(rows, answer.highlight),
         notes=notes,
         source=source,

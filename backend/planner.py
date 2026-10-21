@@ -76,6 +76,13 @@ VOCABULARY (how to sort when the question uses these words and names no other me
   (credential_level = 3) unless another level is asked, programs.year = the latest year.
 - "safest", "lowest crime": join campus_crime, ORDER BY criminal_offenses_per_1000_students ASC and
   only include schools with at least 1,000 students (schools.student_size >= 1000).
+- "financial aid", "aid", "scholarships", "grants", "most generous", "need-based": there is no aid amount
+  per school; aid shows up as a lower net price (what families pay after grants and scholarships). Use
+  net price: ORDER BY schools.cost_avg_net_price ASC (or the net_price_column for a family income) and
+  also select ipeds_costs.tuition_fees_in_state and tuition_fees_out_of_state so the sticker price shows
+  next to it. Answer these directly (don't ask about family income or the type of scholarship).
+  "Pell grants" = schools.pell_grant_rate (share of students who receive one); athletic
+  scholarships = athletics.athletic_aid_total_amount.
 - "best value": schools.earnings_median_10yr / NULLIF(schools.cost_avg_net_price, 0) AS value_ratio,
   ORDER BY value_ratio DESC, selecting earnings and net price too.
 """.strip()
@@ -249,7 +256,9 @@ RULES:
   column names (use AS only for computed values); exclude NULLs in
   filtered or sorted columns; add LIMIT 50 unless a number or count is asked for.
 - If the question gives no criteria at all (e.g. "help me find a good school", "what college is
-  right for me"), submit clarify with vague=true and a one-sentence clarification.
+  right for me"), submit clarify with vague=true and a one-sentence clarification. A question that
+  names any measure or topic (aid, scholarships, cost, a major, a place, a school, a ranking) is not
+  vague: answer it with run_query, using the VOCABULARY defaults instead of asking for preferences.
 - When EARLIER IN THIS CONVERSATION is given, the QUESTION may be a follow-up ("what about its
   acceptance rate?", "only the public ones", "and in Texas?"): take the schools, places and filters it
   refers to from the earlier questions and answers (including scope such as universities), resolve
