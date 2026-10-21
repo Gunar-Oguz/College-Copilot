@@ -77,7 +77,8 @@ def test_profile_404(client):
 
 
 def test_pages_are_served(client):
-    for path in (f"/school/{UCLA}", "/compare", "/terms", "/privacy", "/static/auth.js", "/static/common.css"):
+    for path in ("/", "/chat", f"/school/{UCLA}", "/compare", "/terms", "/privacy", "/static/auth.js",
+                 "/static/common.css"):
         assert client.get(path).status_code == 200
 
 
@@ -142,3 +143,8 @@ def test_deadlines_loaded():
         pytest.skip("school_deadlines not loaded")
     rows = execute_sql("SELECT deadline_type, deadline_date FROM school_deadlines WHERE unitid = 166027")
     assert {"restrictive_early_action", "regular"} <= {r["deadline_type"] for r in rows}
+
+
+def test_landing_stats(client):
+    stats = client.get("/api/stats").json()
+    assert stats["ranked"] > 3000 and stats["deadlines"] > 0

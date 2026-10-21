@@ -269,7 +269,7 @@ async function signInWithGoogle() {
   const button = document.getElementById("google-btn");
   button.disabled = true;
   const { error } = await sb.auth.signInWithOAuth({
-    provider: "google", options: { redirectTo: `${location.origin}/` },  // back to the homepage
+    provider: "google", options: { redirectTo: `${location.origin}/` },  // homepage; it forwards signed-in users to /chat
   });
   if (error) {
     button.disabled = false;
@@ -344,7 +344,7 @@ authForm.addEventListener("submit", submitAuth);
 document.getElementById("google-btn").addEventListener("click", signInWithGoogle);
 
 document.getElementById("saved-btn")?.addEventListener("click", () => {
-  if (location.pathname !== "/") location.href = "/#saved";
+  if (location.pathname !== "/chat") location.href = "/chat#saved";
   else if (location.hash === "#saved") window.onSavedClick?.();
   else location.hash = "saved";
 });
