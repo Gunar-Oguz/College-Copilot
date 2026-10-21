@@ -46,6 +46,9 @@ ANTHROPIC_API_KEY=your_key
 COLLEGE_SCORECARD_API_KEY=your_key
 SUPABASE_URL=https://your-project.supabase.co      # optional: accounts and saved schools
 SUPABASE_ANON_KEY=your_publishable_key
+STRIPE_SECRET_KEY=rk_test_...                       # optional: Pro subscriptions (see "Plans and payments")
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
 ### 2. Install dependencies
@@ -153,6 +156,42 @@ is robust to outliers, unlike min-max scaling; open-admission schools count as a
 - **"I don't know" answers** show what we do know about the school (planner lookup, or an exact name or
   nickname found in the question), its website and profile, and questions we can answer.
 - Shared front-end code: `frontend/static/auth.js` (sign-in, Save hearts) and `common.css`.
+
+## Plans and payments (Stripe)
+
+| | Free | Pro ($9/month) |
+|---|---|---|
+| AI questions | 10 per day (reset at midnight UTC) | Unlimited, answered first when busy |
+| Saved schools | 3 | Unlimited |
+| Compare | 3 schools | 10 schools |
+| Reviews | Latest 2 per school | All |
+| Deadline calendar (.ics), CSV export, application checklists, "Why this school?" fit analysis | Locked | Included |
+
+- `plans.py`: `user_plans` (plan, Stripe ids, status, period end), `usage_tracking` (questions per user or
+  per signed-out visitor's hashed IP per UTC day; the limit check and increment are one atomic statement),
+  and the priority queue for AI requests (`AI_CONCURRENCY`, default 4; Pro first).
+- `billing.py`: Stripe Checkout (subscription), Customer Portal, cancel at period end, and webhooks
+  (`POST /api/webhook`, signature verified, each event processed once). The $9/month price is found or
+  created by lookup key `collegecopilot_pro_monthly` (or set `STRIPE_PRICE_ID`).
+- `pro_features.py`: application checklists (built from each school's deadlines and requirements), the
+  student profile and fit analysis (deterministic checks plus a short AI summary that may only cite them),
+  deadline calendar and CSV export.
+- Endpoints: `GET /api/subscription`, `POST /api/create-checkout-session`, `POST /api/billing-portal`,
+  `POST /api/cancel-subscription`, `POST /api/webhook`; Pro-only endpoints answer 402 with
+  `{"detail": {"message", "upgrade": true}}`, which the pages turn into an upgrade prompt.
+
+Setup:
+1. Environment: `STRIPE_SECRET_KEY` (a restricted `rk_` key is recommended), `STRIPE_PUBLISHABLE_KEY`,
+   `STRIPE_WEBHOOK_SECRET`, optionally `APP_URL` (e.g. `https://your-app.onrender.com`) and `USAGE_SALT`.
+2. Stripe Dashboard → Developers → Webhooks: endpoint `https://<your-app>/api/webhook` with events
+   `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`,
+   `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`,
+   `invoice.payment_failed`, `charge.dispute.created`, `charge.refunded`,
+   `radar.early_fraud_warning.created`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+3. Stripe Dashboard → Settings → Billing → Customer portal: save a configuration (allow cancelling and
+   updating payment methods).
+4. Locally, `stripe listen --forward-to localhost:8000/api/webhook` prints a test signing secret. The
+   pricing page also syncs the plan straight from Stripe after checkout, so upgrades show without it.
 
 ## Logging, feedback and admin
 

@@ -113,13 +113,15 @@
     <h2 class="page-title">Compare schools</h2>
 
     <section class="panel">
-      <div class="panel-head"><h3>Pick 2 or 3 schools</h3><span class="muted small" id="pick-count"></span></div>
+      <div class="panel-head"><h3 id="pick-title">Pick 2 or 3 schools</h3><span class="muted small" id="pick-count"></span></div>
       <div class="picked" id="picked"></div>
       <div class="search">
         <input id="search" type="search" placeholder="Search for a school, e.g. UCLA or Ohio State" autocomplete="off"
                aria-label="Search for a school" aria-controls="results">
         <div class="results" id="results" role="listbox" hidden></div>
       </div>
+      <div class="locked-feature" id="pro-limit" hidden><span class="lock">🔒</span>
+        <span><b>Compare up to 10 schools</b> side by side with Pro</span><a href="/pricing">Upgrade</a></div>
       <div id="favorites-box"></div>
     </section>
 
@@ -135,7 +137,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
   <script src="/static/auth.js"></script>
   <script>
-    const MAX = 3;
+    let MAX = 3;  // 10 on Pro (set from the user's plan)
     const picked = [];          // [{id, name, city, state}]
     let savedSchools = [];       // the user's favorites
     let searchResults = {};      // id -> school, for the open results list
@@ -168,6 +170,7 @@
       document.getElementById("pick-count").textContent = `${picked.length} of ${MAX}`;
       searchInput.disabled = picked.length >= MAX;
       searchInput.placeholder = picked.length >= MAX ? "Remove a school to add another" : "Search for a school, e.g. UCLA or Ohio State";
+      document.getElementById("pro-limit").hidden = isPro() || picked.length < MAX;
       renderFavorites();
     }
 
@@ -213,9 +216,14 @@
       comparison.hidden = false;
       comparison.innerHTML = `<p class="muted">Comparing...</p>`;
       try {
-        const res = await fetch(`/api/compare?ids=${picked.map(s => s.id).join(",")}`);
+        const res = await fetch(`/api/compare?ids=${picked.map(s => s.id).join(",")}`, {
+          headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+        });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "Couldn't compare these schools.");
+        if (!res.ok) {
+          const detail = typeof data.detail === "object" && data.detail ? data.detail : { message: data.detail };
+          throw Object.assign(new Error(detail.message || "Couldn't compare these schools."), { upgrade: detail.upgrade });
+        }
         const head = `<tr><th>Measure</th>${data.schools.map(s => `<th>
             <a href="${s.url}">${escapeHtml(s.name)}</a><div class="muted small">${escapeHtml([s.city, s.state].join(", "))} · ${escapeHtml(s.type || "")}</div>
           </th>`).join("")}</tr>`;
@@ -227,7 +235,8 @@
           <div class="table-wrap"><table class="compare-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
           <p class="muted small">Sources: College Scorecard, IPEDS, Clery Act data, CollegeCopilot Score, user reviews.</p>`;
       } catch (err) {
-        comparison.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+        comparison.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`
+          + (err.upgrade ? `<a class="upgrade-cta" href="/pricing">Upgrade to Pro</a>` : "");
       }
     }
 
@@ -267,7 +276,14 @@
       if (!event.target.closest(".search")) resultsEl.hidden = true;
     });
 
+    window.onPlanChanged = p => {
+      MAX = p.limits?.compare_schools || 3;
+      document.getElementById("pick-title").textContent = MAX > 3 ? `Pick 2 to ${MAX} schools` : "Pick 2 or 3 schools";
+      renderPicked();
+    };
+
     window.onAuthChanged = async () => {
+      loadComparison();
       savedSchools = [];
       if (session) {
         try { savedSchools = (await api("/me/favorites")).favorites; } catch { /* handled by api() */ }
@@ -276,7 +292,7 @@
     };
 
     async function start() {
-      const ids = (new URLSearchParams(location.search).get("ids") || "").split(",").map(Number).filter(Boolean).slice(0, MAX);
+      const ids = (new URLSearchParams(location.search).get("ids") || "").split(",").map(Number).filter(Boolean).slice(0, 10);
       if (ids.length) {
         const res = await fetch(`/api/schools/basic?ids=${ids.join(",")}`);
         if (res.ok) picked.push(...(await res.json()).schools);

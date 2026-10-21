@@ -97,7 +97,7 @@ def test_compare_marks_best_and_worst(client):
     assert best[values.index(min(values))]  # lower acceptance rate is better
 
 
-@pytest.mark.parametrize("ids,status", [(f"{UCLA}", 400), (f"{UCLA},{MIT},{USC},{BERKELEY}", 400), ("a,b", 400)])
+@pytest.mark.parametrize("ids,status", [(f"{UCLA}", 400), (f"{UCLA},{MIT},{USC},{BERKELEY}", 402), ("a,b", 400)])
 def test_compare_validation(client, ids, status):
     assert client.get(f"/api/compare?ids={ids}").status_code == status
 

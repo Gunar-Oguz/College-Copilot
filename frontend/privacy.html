@@ -37,7 +37,15 @@
       <ul>
         <li><strong>Account information:</strong> your email address. If you sign in with Google, we also receive your
           name and profile picture from Google.</li>
-        <li><strong>What you save:</strong> your saved schools, private notes and reviews.</li>
+        <li><strong>What you save:</strong> your saved schools, private notes, reviews and application checklists.</li>
+        <li><strong>Your profile (Pro, optional):</strong> scores, GPA, family income, budget, intended major, home
+          state and size preference, only if you enter them for the "Why this school?" fit analysis. You can change or
+          clear them any time.</li>
+        <li><strong>Subscription details:</strong> your plan, billing status and renewal date. Payments are handled by
+          Stripe; we never see or store your card number.</li>
+        <li><strong>Daily question counts:</strong> how many questions you've asked today, to apply the free limit. For
+          visitors who aren't signed in, we count by a scrambled (hashed) version of the IP address, never the address
+          itself.</li>
         <li><strong>Search questions:</strong> the questions you ask, the answers we give and how long they took. These
           are stored <em>without</em> your account or email, so they aren't linked to you. Please don't type personal
           details (like your name, address or test scores) into questions.</li>
@@ -72,13 +80,17 @@
         <li><strong>Anthropic</strong>: the AI that reads your question and writes answers. Your question text is sent
           to Anthropic to generate the answer; your account details are not.</li>
         <li><strong>Google</strong>: only if you choose "Continue with Google."</li>
+        <li><strong>Stripe</strong>: processes Pro subscription payments and stores your payment details. See
+          <a href="https://stripe.com/privacy" target="_blank" rel="noopener">Stripe's privacy policy</a>.</li>
         <li><strong>Wikimedia Commons</strong> and <strong>jsDelivr</strong>: your browser loads campus photos and our
           sign-in code from their servers, so they see your IP address, like any website you visit.</li>
       </ul>
 
       <h3>How long we keep it</h3>
       <ul>
-        <li>Account data (email, saved schools, notes, reviews) is kept until you ask us to delete it.</li>
+        <li>Account data (email, saved schools, notes, reviews, checklists, profile) is kept until you ask us to delete it.</li>
+        <li>Billing records are kept as long as required for tax and accounting.</li>
+        <li>Daily question counts are only needed for the current day.</li>
         <li>Search questions and feedback, which aren't linked to your account, are kept to improve the service.</li>
       </ul>
 

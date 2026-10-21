@@ -298,3 +298,69 @@ dialog.auth::backdrop { background: rgba(17, 24, 39, 0.45); }
 .auth-consent { font-size: 0.75rem; color: var(--muted); text-align: center; line-height: 1.4; }
 .auth .terms-check { flex-direction: row; }
 .auth .terms-check input { padding: 0; border: none; box-shadow: none; }
+
+/* Plans: Upgrade button, Pro badge, upgrade dialog, locked features */
+.header-btn.upgrade-btn { background: #fcd34d; border-color: #fcd34d; color: var(--brand-dark); font-weight: 700; }
+.header-btn.upgrade-btn:hover:not(:disabled) { background: #fde68a; }
+.header-btn[hidden] { display: none; }
+.pro-badge {
+  display: inline-block;
+  background: linear-gradient(120deg, #f59e0b, #fcd34d);
+  color: var(--brand-dark);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 6px;
+  vertical-align: 2px;
+}
+.pro-badge.big { font-size: 0.75rem; padding: 3px 8px; }
+.avatar-btn { position: relative; overflow: visible; }
+.avatar-btn img, .avatar-btn span:not(.pro-dot) { border-radius: 50%; overflow: hidden; }
+.avatar-btn.pro { border-color: #fcd34d; box-shadow: 0 0 0 2px rgba(252, 211, 77, 0.5); }
+.avatar-btn.pro::after {
+  content: "PRO";
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fcd34d;
+  color: var(--brand-dark);
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 1px 4px;
+  border-radius: 5px;
+  line-height: 1.2;
+}
+.user-menu-plan { font-size: 0.78rem; color: var(--muted); margin-top: 8px; }
+.user-menu #menu-billing { background: var(--brand-soft); color: var(--brand-dark); }
+.user-menu #menu-billing:hover:not(:disabled) { background: #dfe2ff; color: var(--brand-dark); }
+dialog.upgrade .upgrade-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
+dialog.upgrade .upgrade-list li::before { content: "✓"; color: #059669; font-weight: 800; margin-right: 8px; }
+.upgrade-cta {
+  display: block;
+  text-align: center;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 12px 16px;
+  border-radius: 12px;
+}
+.upgrade-cta:hover { background: #2f33c4; }
+.upgrade-later { align-self: center; color: var(--muted); text-decoration: none; }
+.locked-feature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px dashed #c7cbe0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.locked-feature b { color: var(--text); }
+.locked-feature .lock { font-size: 1rem; }
+.locked-feature a, .locked-feature button.link-btn { margin-left: auto; white-space: nowrap; }

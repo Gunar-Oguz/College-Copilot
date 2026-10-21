@@ -184,6 +184,28 @@
     .saved-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     a.back-btn { text-decoration: none; display: inline-block; border-radius: 12px; font-weight: 600; }
 
+    .usage-line { text-align: center; font-size: 0.75rem; color: var(--muted); margin-top: 6px; }
+    .usage-line a { color: var(--brand); font-weight: 600; }
+    .usage-line.empty { color: #b45309; }
+    .limit-card { align-items: center; text-align: center; border: 2px solid #fde68a; background: linear-gradient(180deg, #fffbeb, #fff); }
+    .limit-card h3 { font-size: 1.15rem; }
+    .limit-card p { max-width: 520px; line-height: 1.5; }
+    .limit-icon { width: 48px; height: 48px; border-radius: 14px; background: #fcd34d; display: grid; place-items: center; font-size: 1.4rem; }
+    .limit-actions { width: 100%; max-width: 320px; }
+    .pro-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .plan-hint { font-size: 0.8rem; color: var(--muted); }
+    .pro-tools .plan-hint { margin-right: auto; }
+    .pro-tools .plan-hint a { color: var(--brand); }
+    details.checklist { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
+    details.checklist summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+    details.checklist .progress { color: var(--muted); font-weight: 500; font-size: 0.8rem; margin-left: 6px; }
+    .check-items { list-style: none; padding: 0; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }
+    .check-items li { display: flex; align-items: flex-start; gap: 8px; font-size: 0.88rem; }
+    .check-items label { display: flex; gap: 8px; align-items: flex-start; flex: 1; cursor: pointer; line-height: 1.4; }
+    .check-items input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--brand); flex-shrink: 0; }
+    .check-items li.done span { color: var(--muted); text-decoration: line-through; }
+    .check-items .link-btn { color: var(--muted); text-decoration: none; font-size: 1rem; }
+
     .answer-notes { display: flex; flex-direction: column; gap: 4px; }
     .answer-notes p {
       font-size: 0.82rem;
@@ -535,6 +557,7 @@
       <textarea id="question" rows="1" placeholder="Ask a question about colleges..." aria-label="Your question"></textarea>
       <button id="send-btn" type="button">Send</button>
     </div>
+    <div class="usage-line" id="usage-line" hidden></div>
     <nav class="footer-links" aria-label="Legal">
       <a href="/terms">Terms of Service</a>
       <a href="/privacy">Privacy Policy</a>
@@ -669,6 +692,30 @@
         <div><div class="block-title">Questions I can answer</div><div class="suggestions">${suggestions}</div></div></div>`;
     }
 
+    // Daily free questions: "7 of 10 free questions left today · Upgrade".
+    function updateUsage(used, limit) {
+      const line = document.getElementById("usage-line");
+      if (!limit) { line.hidden = true; return; }
+      const left = Math.max(0, limit - used);
+      line.hidden = false;
+      line.innerHTML = `${left} of ${limit} free questions left today ·
+        <a href="/pricing">Upgrade for unlimited</a>`;
+      line.classList.toggle("empty", left === 0);
+    }
+
+    function renderLimit(data) {
+      const signup = session ? "" : `<button type="button" class="link-btn" data-auth="signup">Create a free account</button> to save schools and keep notes. `;
+      return `<div class="card limit-card">
+        <div class="limit-icon" aria-hidden="true">⚡</div>
+        <h3>You've reached today's free limit</h3>
+        <p>${escapeHtml(data.response)}</p>
+        <div class="limit-actions">
+          <a class="upgrade-cta" href="/pricing">Upgrade to Pro: $9/month</a>
+        </div>
+        <p class="plan-hint">${signup}Your free questions come back at midnight UTC.</p>
+      </div>`;
+    }
+
     function feedbackButtons(logId) {
       if (!logId) return "";
       return `<div class="feedback" data-log-id="${logId}">
@@ -768,7 +815,10 @@
       try {
         const res = await fetch(API_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
           body: JSON.stringify({ question }),
         });
         const data = await res.json();
@@ -780,7 +830,10 @@
           return;
         }
 
-        if (data.kind === "result") {
+        if (data.usage) updateUsage(data.usage.used, data.usage.limit);
+        if (data.kind === "limit") {
+          addMessage("answer", renderLimit(data));
+        } else if (data.kind === "result") {
           addMessage("answer", renderAnswer(data));
         } else {
           const extra = data.fallback ? renderFallback(data.fallback) : "";
@@ -828,6 +881,13 @@
           <button type="button" class="remove-btn" data-action="remove">♥ Remove</button>
         </div>
         <div class="chips">${chips}</div>
+        ${isPro()
+          ? `<details class="checklist" data-school-id="${school.school_id}">
+               <summary>Application checklist <span class="progress"></span></summary>
+               <div class="checklist-body"><p class="sign-in-hint">Loading...</p></div>
+             </details>`
+          : `<div class="locked-feature"><span class="lock">🔒</span><span><b>Application checklist</b> for this school</span>
+               <button type="button" class="link-btn" data-action="upgrade">Upgrade to Pro</button></div>`}
         <div class="notes">
           <div class="notes-title">My notes</div>
           ${school.notes.map(renderNote).join("")}
@@ -862,7 +922,15 @@
         const body = list.length
           ? list.map(renderSavedCard).join("")
           : `<div class="saved-empty">No saved schools yet.<br>Tap ♡ next to any school in your results to save it here.</div>`;
-        savedView.innerHTML = savedView.querySelector(".saved-head").outerHTML + body;
+        const limit = plan.limits?.saved_schools;
+        const lock = isPro() ? "" : "🔒 ";
+        const tools = `<div class="pro-tools">
+            ${limit ? `<span class="plan-hint">${list.length} of ${limit} saved on Free · <a href="/pricing">Save unlimited with Pro</a></span>`
+                    : `<span class="plan-hint"><span class="pro-badge">PRO</span> Unlimited saved schools</span>`}
+            <button type="button" class="back-btn" data-action="ics">${lock}📅 Deadline calendar</button>
+            <button type="button" class="back-btn" data-action="csv">${lock}⬇ Export CSV</button>
+          </div>`;
+        savedView.innerHTML = savedView.querySelector(".saved-head").outerHTML + tools + body;
       } catch (err) {
         if (err.message !== "signed out") savedView.querySelector(".loading-bubble").textContent = err.message;
       }
@@ -880,9 +948,58 @@
       else showChat();
     }
 
+    // ---------- Application checklists (Pro) ----------
+
+    function renderChecklist(details, items) {
+      const done = items.filter(i => i.done).length;
+      details.querySelector(".progress").textContent = `${done}/${items.length} done`;
+      details.querySelector(".checklist-body").innerHTML = `<ul class="check-items">
+          ${items.map(i => `<li data-item-id="${i.id}" class="${i.done ? "done" : ""}">
+            <label><input type="checkbox" class="check-item" ${i.done ? "checked" : ""}>
+              <span>${escapeHtml(i.item_text)}</span></label>
+            <button type="button" class="link-btn" data-action="delete-item" aria-label="Delete item">×</button>
+          </li>`).join("")}
+        </ul>
+        <form class="note-form" data-action="add-item">
+          <textarea placeholder="Add a step, e.g. schedule an interview" aria-label="New checklist item" maxlength="300"></textarea>
+          <button type="submit">Add</button>
+        </form>`;
+    }
+
+    async function loadChecklist(details) {
+      try {
+        const { items } = await api(`/me/checklist/${details.dataset.schoolId}`);
+        renderChecklist(details, items);
+      } catch (err) { handleError(err); }
+    }
+
+    savedView.addEventListener("toggle", event => {
+      if (event.target.matches?.("details.checklist") && event.target.open) loadChecklist(event.target);
+    }, true);
+
+    savedView.addEventListener("change", async event => {
+      if (!event.target.matches(".check-item")) return;
+      const li = event.target.closest("li");
+      try {
+        await api(`/me/checklist/items/${li.dataset.itemId}`, { method: "PUT", body: JSON.stringify({ done: event.target.checked }) });
+        loadChecklist(event.target.closest("details"));
+      } catch (err) { event.target.checked = !event.target.checked; handleError(err); }
+    });
+
     async function handleSavedClick(event) {
       const button = event.target.closest("button[data-action]");
       if (!button) return;
+      if (button.dataset.action === "upgrade") { showUpgrade("Track every application step with checklists on Pro."); return; }
+      if (button.dataset.action === "ics") { downloadFile("/me/deadlines.ics", "college-deadlines.ics"); return; }
+      if (button.dataset.action === "csv") { downloadFile("/me/favorites.csv", "my-college-list.csv"); return; }
+      if (button.dataset.action === "delete-item") {
+        const li = button.closest("li");
+        try {
+          await api(`/me/checklist/items/${li.dataset.itemId}`, { method: "DELETE" });
+          loadChecklist(button.closest("details"));
+        } catch (err) { handleError(err); }
+        return;
+      }
       const card = button.closest(".saved-card");
       const noteEl = button.closest(".note");
       const action = button.dataset.action;
@@ -922,6 +1039,18 @@
     }
 
     async function handleAddNote(event) {
+      const itemForm = event.target.closest("form[data-action='add-item']");
+      if (itemForm) {
+        event.preventDefault();
+        const text = itemForm.querySelector("textarea").value.trim();
+        if (!text) return;
+        const details = itemForm.closest("details");
+        try {
+          await api(`/me/checklist/${details.dataset.schoolId}`, { method: "POST", body: JSON.stringify({ item_text: text }) });
+          loadChecklist(details);
+        } catch (err) { handleError(err); }
+        return;
+      }
       const form = event.target.closest("form[data-action='add-note']");
       if (!form) return;
       event.preventDefault();
@@ -954,6 +1083,7 @@
       if (!session && location.hash === "#saved") location.hash = "";
       route();
     };
+    window.onPlanChanged = p => updateUsage(p.questions_today || 0, p.limits?.daily_questions);
 
     sendBtn.addEventListener("click", () => sendQuestion());
 

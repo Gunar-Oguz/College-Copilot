@@ -39,6 +39,26 @@ document.body.insertAdjacentHTML("beforeend", `
   </dialog>
 `);
 
+document.body.insertAdjacentHTML("beforeend", `
+  <dialog class="auth upgrade" id="upgrade-dialog" aria-labelledby="upgrade-title">
+    <div class="auth-body">
+      <div class="auth-head">
+        <h2 id="upgrade-title"><span class="pro-badge big">PRO</span> Upgrade to Pro</h2>
+        <button type="button" class="auth-close" id="upgrade-close" aria-label="Close">×</button>
+      </div>
+      <p class="auth-reason" id="upgrade-reason"></p>
+      <ul class="upgrade-list">
+        <li>Unlimited AI questions</li>
+        <li>Save unlimited schools and compare up to 10</li>
+        <li>Deadline calendar, CSV export and application checklists</li>
+        <li>"Why this school?" fit analysis and all student reviews</li>
+      </ul>
+      <a class="upgrade-cta" href="/pricing">See Pro for $9/month →</a>
+      <button type="button" class="link-btn upgrade-later" id="upgrade-later">Not now</button>
+    </div>
+  </dialog>
+`);
+
 const authDialog = document.getElementById("auth-dialog");
 const authForm = document.getElementById("auth-form");
 const authMessage = document.getElementById("auth-message");
@@ -91,8 +111,91 @@ async function api(path, options = {}) {
     openAuth("signin", "Your session expired. Please sign in again.");
     throw new Error("signed out");
   }
-  if (!res.ok) throw new Error(data.detail || "Something went wrong");
+  if (!res.ok) {
+    const detail = typeof data.detail === "object" && data.detail ? data.detail : { message: data.detail };
+    const err = new Error(detail.message || "Something went wrong");
+    err.upgrade = Boolean(detail.upgrade);
+    throw err;
+  }
   return data;
+}
+
+// ---------- Plans (Free / Pro) ----------
+
+let plan = { plan: "free", limits: { daily_questions: 10, saved_schools: 3, compare_schools: 3 } };
+
+function isPro() {
+  return plan.plan === "pro";
+}
+
+async function loadPlan() {
+  try {
+    const res = await fetch("/api/subscription", {
+      headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+    });
+    if (res.ok) plan = await res.json();
+  } catch { /* keep the free defaults */ }
+  updatePlanUI();
+  window.onPlanChanged?.(plan);
+  return plan;
+}
+
+function showUpgrade(message) {
+  document.getElementById("upgrade-reason").textContent =
+    message || "Get unlimited questions and every tool for building your college list.";
+  const dialog = document.getElementById("upgrade-dialog");
+  if (!dialog.open) dialog.showModal();
+}
+
+// Error from api(): show the upgrade prompt for Pro-only actions, otherwise a toast.
+function handleError(err) {
+  if (err.message === "signed out") return;
+  if (err.upgrade) showUpgrade(err.message);
+  else showToast(err.message);
+}
+
+async function openBillingPortal() {
+  try {
+    const { url } = await api("/api/billing-portal", { method: "POST" });
+    location.href = url;
+  } catch (err) { handleError(err); }
+}
+
+// Download a Pro file (.ics, .csv) with the sign-in token, which a plain link can't send.
+async function downloadFile(path, filename) {
+  if (!session) { openAuth("signin", "Sign in to download."); return; }
+  const res = await fetch(path, { headers: { Authorization: `Bearer ${session.access_token}` } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const detail = typeof data.detail === "object" && data.detail ? data.detail : { message: data.detail };
+    handleError(Object.assign(new Error(detail.message || "Download failed"), { upgrade: Boolean(detail.upgrade) }));
+    return;
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const link = Object.assign(document.createElement("a"), { href: url, download: filename });
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function updatePlanUI() {
+  document.body.classList.toggle("is-pro", isPro());
+  // "Upgrade" button in the header (not on the landing or pricing pages).
+  const account = document.querySelector("header .header-inner > .account");
+  const skip = ["/", "/pricing"].includes(location.pathname);
+  if (account && !skip && !document.getElementById("upgrade-btn")) {
+    account.insertAdjacentHTML("afterbegin",
+      `<a class="header-btn upgrade-btn" id="upgrade-btn" href="/pricing">⚡<span class="btn-label"> Upgrade</span></a>`);
+  }
+  const upgrade = document.getElementById("upgrade-btn");
+  if (upgrade) upgrade.hidden = isPro();
+  const avatar = document.getElementById("avatar-btn");
+  if (avatar) avatar.classList.toggle("pro", isPro());
+  const badge = document.getElementById("menu-plan");
+  if (badge) badge.innerHTML = isPro() ? `<span class="pro-badge">PRO</span> Pro plan` : "Free plan";
+  const billing = document.getElementById("menu-billing");
+  if (billing) billing.textContent = isPro() ? "Manage billing" : "Upgrade to Pro";
 }
 
 function setAuthMode(mode) {
@@ -132,6 +235,8 @@ function ensureAccountMenu(box) {
       <div class="user-menu" id="user-menu" role="menu" hidden>
         <div class="user-menu-name" id="user-menu-name"></div>
         <div class="user-menu-email" id="user-menu-email"></div>
+        <div class="user-menu-plan" id="menu-plan">Free plan</div>
+        <button type="button" role="menuitem" id="menu-billing">Upgrade to Pro</button>
         <button type="button" role="menuitem" id="menu-sign-out">Sign out</button>
       </div>
     </div>`);
@@ -142,6 +247,12 @@ function ensureAccountMenu(box) {
   document.addEventListener("click", event => { if (!event.target.closest(".user-menu-wrap")) setOpen(false); });
   document.addEventListener("keydown", event => { if (event.key === "Escape") setOpen(false); });
   document.getElementById("menu-sign-out").addEventListener("click", () => { setOpen(false); sb?.auth.signOut(); });
+  document.getElementById("menu-billing").addEventListener("click", () => {
+    setOpen(false);
+    if (isPro()) openBillingPortal();
+    else location.href = "/pricing";
+  });
+  updatePlanUI();
 }
 
 function profileOf(user) {
@@ -173,6 +284,7 @@ function updateAuthUI() {
   avatar.querySelector("img")?.addEventListener("error", () => {
     avatar.innerHTML = `<span>${escapeHtml(initial)}</span>`;  // photo failed to load
   });
+  avatar.classList.toggle("pro", isPro());
   document.getElementById("user-menu-name").textContent = user.name;
   document.getElementById("user-menu-email").textContent = user.email;
 }
@@ -210,7 +322,7 @@ async function toggleSave(schoolId) {
   } catch (err) {
     wasSaved ? favorites.add(schoolId) : favorites.delete(schoolId);
     refreshHearts();
-    if (err.message !== "signed out") showToast(err.message);
+    handleError(err);
   }
 }
 
@@ -296,7 +408,7 @@ async function initAuth() {
   if (authError) setTimeout(() => showToast(`Sign-in didn't finish: ${authError}`), 300);
   try {
     const config = (await (await fetch("/config")).json()).supabase || {};
-    if (!config.url || !config.anon_key || !window.supabase) return;
+    if (!config.url || !config.anon_key || !window.supabase) { await loadPlan(); return; }
     sb = window.supabase.createClient(config.url, config.anon_key, {
       auth: { flowType: "pkce", persistSession: true, detectSessionInUrl: true },
     });
@@ -315,7 +427,7 @@ async function initAuth() {
           favorites.clear();
           refreshHearts();
         }
-        window.onAuthChanged?.(event);
+        loadPlan().finally(() => window.onAuthChanged?.(event));
       }, 0);
     });
   } catch {
@@ -347,4 +459,10 @@ document.getElementById("saved-btn")?.addEventListener("click", () => {
   if (location.pathname !== "/chat") location.href = "/chat#saved";
   else if (location.hash === "#saved") window.onSavedClick?.();
   else location.hash = "saved";
+});
+
+document.getElementById("upgrade-close").addEventListener("click", () => document.getElementById("upgrade-dialog").close());
+document.getElementById("upgrade-later").addEventListener("click", () => document.getElementById("upgrade-dialog").close());
+document.getElementById("upgrade-dialog").addEventListener("click", event => {
+  if (event.target.id === "upgrade-dialog") event.target.close();
 });
