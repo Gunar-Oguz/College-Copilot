@@ -15,7 +15,9 @@ _FORBIDDEN_PATTERNS = [
     r"\bdblink\w*\s*\(",
     r"\bcopy\b",
     r"\binto\b",
-    r"\bset_config\s*\(",
+    r"set_config",
+    r"\bu&['\"]",  # unicode-escaped names could spell a blocked word
+    r"\buser_(favorites|notes)\b",  # private per-user data
 ]
 
 

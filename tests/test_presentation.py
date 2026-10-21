@@ -156,3 +156,13 @@ def test_dates_in_rows_allow_their_numbers():
     import datetime
     rows = [{"name": "Ohio State", "accredited_since": datetime.date(1913, 1, 1), "latest_action_date": datetime.date(2017, 7, 31)}]
     assert unsupported_numbers("Accredited since 1913, renewed July 31, 2017.", rows, "") == []
+
+
+def test_blocks_carry_school_ids_for_saving():
+    one = build_blocks([{"id": 110662, "name": "UCLA", "admission_rate": 0.09}])
+    assert one[0]["school_id"] == 110662
+    two = build_blocks([{"id": 1, "name": "A", "admission_rate": 0.1, "completion_rate": 0.9},
+                        {"id": 2, "name": "B", "admission_rate": 0.2, "completion_rate": 0.8}])
+    assert two[0]["school_ids"] == [1, 2]
+    jobs = build_blocks([{"soc_code": "15-1252", "title": "Software Developers", "median_annual_salary": 1}])
+    assert jobs[0]["school_id"] is None

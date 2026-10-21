@@ -43,6 +43,8 @@ college_cop/
 ```
 ANTHROPIC_API_KEY=your_key
 COLLEGE_SCORECARD_API_KEY=your_key
+SUPABASE_URL=https://your-project.supabase.co      # optional: accounts and saved schools
+SUPABASE_ANON_KEY=your_publishable_key
 ```
 
 ### 2. Install dependencies
@@ -110,6 +112,26 @@ Try questions like:
 4. "What's the acceptance rate at UW?" (asks which UW)
 5. "Which 5 schools have the highest earnings 4 years after a computer science bachelor's?"
 6. "Public colleges within 40 miles of 94720 with a graduation rate above 70%"
+
+## Accounts, saved schools and notes
+
+Sign-in uses [Supabase Auth](https://supabase.com/docs/guides/auth) (email/password and Google).
+Without `SUPABASE_URL` / `SUPABASE_ANON_KEY` the app works as before, with no sign-in buttons.
+
+- The browser signs in with supabase-js and sends its access token; `user_data.py` asks Supabase
+  who the token belongs to and only trusts that user id.
+- `user_favorites` and `user_notes` are created at startup. Every query filters on the user id, and
+  row-level security on `app.user_id` is a second layer. The planner's SQL validator blocks both
+  tables, so answers can never read anyone's saved schools or notes.
+- Endpoints: `GET /me/favorites`, `GET /me/favorite-ids`, `PUT|DELETE /me/favorites/{unitid}`,
+  `POST /me/favorites/{unitid}/notes`, `PUT|DELETE /me/notes/{id}`.
+
+Supabase dashboard setup:
+1. Authentication → URL Configuration: set the Site URL to the deployed URL and add
+   `http://localhost:8000` and the deployed URL to Redirect URLs.
+2. Google: create an OAuth client in Google Cloud (authorized redirect URI
+   `https://<project>.supabase.co/auth/v1/callback`), then enable Authentication → Providers →
+   Google with its client ID and secret. Until then the Google button says it isn't turned on.
 
 ## Deploy
 
