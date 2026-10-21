@@ -169,6 +169,16 @@ TOOLS = [
                     "description": "The result column that most directly answers the question (charted)",
                 },
                 "clarification": {"type": "string"},
+                "standalone_question": {
+                    "type": "string",
+                    "description": "Only for a follow-up: the QUESTION rewritten to stand on its own, "
+                                   "e.g. \"What is MIT's acceptance rate?\"",
+                },
+                "vague": {
+                    "type": "boolean",
+                    "description": "With clarify: true when the question gives no criteria to search by "
+                                   "(the app then shows options for location, cost, ranking and major)",
+                },
             },
             "required": ["kind"],
         },
@@ -185,6 +195,8 @@ class Answer:
     highlight: str | None = None  # column that answers the question
     trace: list[str] = field(default_factory=list)
     school_ids: list[int] = field(default_factory=list)  # schools named in the question, if resolved
+    vague: bool = False  # clarify: the question gave no criteria at all
+    standalone_question: str = ""  # a follow-up rewritten to stand on its own
 
 
 _client = None
@@ -236,6 +248,12 @@ RULES:
   select schools.id and schools.name plus every column used to filter or sort, keeping the schema's
   column names (use AS only for computed values); exclude NULLs in
   filtered or sorted columns; add LIMIT 50 unless a number or count is asked for.
+- If the question gives no criteria at all (e.g. "help me find a good school", "what college is
+  right for me"), submit clarify with vague=true and a one-sentence clarification.
+- When EARLIER IN THIS CONVERSATION is given, the QUESTION may be a follow-up ("what about its
+  acceptance rate?", "only the public ones", "and in Texas?"): take the schools, places and filters it
+  refers to from the earlier questions and answers (including scope such as universities), resolve
+  those schools again, answer only the new QUESTION, and submit it as standalone_question.
 - If a named school can't be found or the data can't answer the question, submit cannot_answer.
   Subjective quality (best dorms, food, social life, prestige) is not in the data: cannot_answer.
 
@@ -302,25 +320,34 @@ class _Session:
                 return Answer("result", rows=rows, source=source, trace=self.trace)
             return Answer("cannot_answer", trace=self.trace, school_ids=self.school_ids)
         if kind == "clarify" and args.get("clarification"):
-            return Answer("clarify", clarification=args["clarification"].strip(), trace=self.trace)
+            return Answer("clarify", clarification=args["clarification"].strip(), trace=self.trace,
+                          vague=bool(args.get("vague")))
         if kind == "result" and args.get("result_id") in self.results:
             source, rows = self.results[args["result_id"]]
             return Answer(
                 "result", rows=rows, source=source,
                 highlight=args.get("highlight_column"), trace=self.trace,
+                standalone_question=(args.get("standalone_question") or "").strip()[:500],
             )
         return "Invalid submission: give a valid result_id, a clarification, or kind=cannot_answer."
 
 
-def plan_answer(question: str) -> Answer:
+def history_text(history: list[dict]) -> str:
+    """Earlier questions and short summaries of their answers, oldest first."""
+    turns = "\n".join(f'Q: "{t["question"]}"\nA: {t["answer"]}' for t in history)
+    return f"EARLIER IN THIS CONVERSATION (oldest first; only for understanding follow-ups):\n{turns}\n\n"
+
+
+def plan_answer(question: str, history: list[dict] | None = None) -> Answer:
     session = _Session()
     system = [{
         "type": "text",
         "text": build_prompt(get_schema(), get_latest_year()),
         "cache_control": {"type": "ephemeral"},
     }]
-    content = f'QUESTION: "{question}"'
-    if hints := question_hints(question):
+    content = (history_text(history) if history else "") + f'QUESTION: "{question}"'
+    # A follow-up ("only the public ones") keeps the scope of the question before it.
+    if hints := question_hints(question) or (history and question_hints(history[-1]["question"])):
         content += f"\n\n{hints}"
     messages = [{"role": "user", "content": content}]
     for _ in range(MAX_TOOL_ROUNDS):

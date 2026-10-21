@@ -73,7 +73,7 @@ def client(monkeypatch):
             raise user_data.AuthError("Session expired, please sign in again")
         return USERS[token]
 
-    def fake_answer(question):
+    def fake_answer(question, history=None):
         return main.AskResponse(question=question, kind="result", response="ok"), [], "SELECT 1"
 
     monkeypatch.setattr(user_data, "get_user", fake_get_user)

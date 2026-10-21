@@ -328,15 +328,21 @@ def _canonical(number: float) -> str:
     return f"{abs(number):.2f}".rstrip("0").rstrip(".")
 
 
+def _half_up(value, scale: int, digits: int) -> float:
+    exponent = Decimal(1).scaleb(-digits)
+    return float((Decimal(str(value)) * scale).quantize(exponent, rounding=ROUND_HALF_UP))
+
+
 def _number_forms(value) -> set[str]:
     """Ways a number may appear in prose: raw, rounded, and as a percentage."""
     number = _to_float(value)
     if number is None:
         return set()
-    candidates = [number, round(number), round(number, 1)]
+    candidates = [number, round(number), round(number, 1), _half_up(value, 1, 0), _half_up(value, 1, 1)]
     if abs(number) <= 1:
         pct = number * 100
-        candidates += [pct, round(pct), round(pct, 1)]
+        # Half-up like format_value: 0.0455 shows as 4.6%, which float round() would make 4.5.
+        candidates += [pct, round(pct), round(pct, 1), _half_up(value, 100, 0), _half_up(value, 100, 1)]
     for scale in (1e6, 1e9):
         if abs(number) >= scale:
             candidates += [round(number / scale, digits) * scale for digits in (0, 1, 2)]

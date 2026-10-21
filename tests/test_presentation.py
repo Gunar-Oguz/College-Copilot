@@ -214,3 +214,9 @@ def test_unitid_is_hidden_and_dates_are_not_metrics():
     table = blocks[-1]
     assert "Unitid" not in [c["label"] for c in table["columns"]]
     assert "August 1, 2026" in table["rows"][0]["cells"]
+
+
+def test_half_up_percentages_match_the_displayed_value():
+    rows = [{"id": 166683, "name": "MIT", "admission_rate": Decimal("0.0455")}]
+    assert format_value(Decimal("0.0455"), "percent") == "4.6%"
+    assert unsupported_numbers("MIT's acceptance rate is 4.6%.", rows, "") == []
