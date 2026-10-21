@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Compare schools · CollegeCopilot</title>
+  <link rel="stylesheet" href="/static/common.css">
+  <link rel="stylesheet" href="/static/pages.css">
+  <style>
+    .picked { display: flex; flex-wrap: wrap; gap: 8px; }
+    .picked-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--brand-soft);
+      color: var(--brand-dark);
+      border-radius: 999px;
+      padding: 6px 8px 6px 14px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .picked-chip button { background: none; color: var(--brand-dark); padding: 0 6px; font-size: 1rem; align-self: auto; }
+    .search { position: relative; }
+    .search input {
+      width: 100%;
+      font: inherit;
+      font-size: 16px;
+      padding: 11px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .search input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(59, 63, 216, 0.15); }
+    .results {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 12px 30px rgba(17, 24, 39, 0.12);
+      z-index: 20;
+      overflow: hidden;
+    }
+    .results button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: none;
+      color: var(--text);
+      font-weight: 500;
+      padding: 10px 14px;
+      border-radius: 0;
+    }
+    .results button:hover, .results button:focus-visible { background: var(--surface-2); opacity: 1; }
+    .results .place { color: var(--muted); font-size: 0.8rem; margin-left: 6px; }
+    .favorite-picks { display: flex; flex-wrap: wrap; gap: 8px; }
+    .favorite-picks .pill[disabled] { opacity: 0.45; cursor: default; }
+
+    .compare-table th:first-child, .compare-table td:first-child {
+      position: sticky;
+      left: 0;
+      background: var(--surface);
+      z-index: 1;
+      color: var(--muted);
+      font-weight: 500;
+      min-width: 150px;
+    }
+    .compare-table thead th:first-child { background: var(--surface-2); }
+    .compare-table th a { color: var(--text); }
+    .compare-table td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .compare-table .hint { display: block; font-size: 0.72rem; }
+    .compare-table td:first-child { white-space: normal; }
+    .compare-table th:not(:first-child), .compare-table td:not(:first-child) { min-width: 120px; }
+    @media (max-width: 640px) {
+      .compare-table th:first-child, .compare-table td:first-child { min-width: 112px; max-width: 130px; }
+    }
+    .compare-table td.best { background: #ecfdf5; color: #065f46; font-weight: 650; }
+    .compare-table td.worst { background: #fef2f2; color: #991b1b; }
+    .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.78rem; color: var(--muted); }
+    .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+    .legend .g::before { background: #a7f3d0; }
+    .legend .r::before { background: #fecaca; }
+  </style>
+</head>
+<body class="page">
+  <header>
+    <div class="header-inner">
+      <a href="/" class="brand" aria-label="CollegeCopilot home">
+        <svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+          <rect width="40" height="40" rx="11" fill="#ffffff" fill-opacity="0.14"/>
+          <rect x="0.5" y="0.5" width="39" height="39" rx="10.5" fill="none" stroke="#ffffff" stroke-opacity="0.3"/>
+          <path d="M20 9 L34 16 L20 23 L6 16 Z" fill="#ffffff"/>
+          <path d="M12 19.5 V26 C12 28.8 16 31 20 31 C24 31 28 28.8 28 26 V19.5 L20 23.5 Z" fill="#ffffff" fill-opacity="0.85"/>
+          <path d="M31 17.5 V25" stroke="#fcd34d" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="31" cy="26.5" r="2" fill="#fcd34d"/>
+        </svg>
+        <h1>College<span class="accent">Copilot</span></h1>
+      </a>
+      <div class="account">
+        <div id="signed-out" class="account" hidden>
+          <button type="button" class="header-btn" data-auth="signin">Sign in</button>
+          <button type="button" class="header-btn primary signup" data-auth="signup">Sign up</button>
+        </div>
+        <div id="signed-in" class="account" hidden>
+          <button type="button" class="header-btn" id="saved-btn" aria-label="My saved schools">♥<span class="btn-label"> Saved</span><span class="saved-count" id="saved-count">0</span></button>
+          <span class="user-email" id="user-email"></span>
+          <button type="button" class="header-btn" id="sign-out">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-main">
+    <h2 class="page-title">Compare schools</h2>
+
+    <section class="panel">
+      <div class="panel-head"><h3>Pick 2 or 3 schools</h3><span class="muted small" id="pick-count"></span></div>
+      <div class="picked" id="picked"></div>
+      <div class="search">
+        <input id="search" type="search" placeholder="Search for a school, e.g. UCLA or Ohio State" autocomplete="off"
+               aria-label="Search for a school" aria-controls="results">
+        <div class="results" id="results" role="listbox" hidden></div>
+      </div>
+      <div id="favorites-box"></div>
+    </section>
+
+    <section class="panel" id="comparison" hidden aria-live="polite"></section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+  <script src="/static/auth.js"></script>
+  <script>
+    const MAX = 3;
+    const picked = [];          // [{id, name, city, state}]
+    let savedSchools = [];       // the user's favorites
+    let searchResults = {};      // id -> school, for the open results list
+    const pickedEl = document.getElementById("picked");
+    const searchInput = document.getElementById("search");
+    const resultsEl = document.getElementById("results");
+    const favoritesBox = document.getElementById("favorites-box");
+    const comparison = document.getElementById("comparison");
+
+    const FORMAT = {
+      score: v => Number(v).toFixed(1),
+      percent: v => `${(Number(v) * 100).toFixed(1)}%`,
+      money: v => `$${Math.round(Number(v)).toLocaleString()}`,
+      ratio: v => `${Number(v)}:1`,
+      int: v => Math.round(Number(v)).toLocaleString(),
+      number: v => Number(v).toFixed(1),
+      rating: v => `${Number(v).toFixed(1)} ★`,
+    };
+
+    function syncUrl() {
+      const ids = picked.map(s => s.id).join(",");
+      history.replaceState(null, "", ids ? `/compare?ids=${ids}` : "/compare");
+    }
+
+    function renderPicked() {
+      pickedEl.innerHTML = picked.length
+        ? picked.map(s => `<span class="picked-chip">${escapeHtml(s.name)}
+            <button type="button" data-remove="${s.id}" aria-label="Remove ${escapeHtml(s.name)}">×</button></span>`).join("")
+        : `<span class="muted small">No schools picked yet.</span>`;
+      document.getElementById("pick-count").textContent = `${picked.length} of ${MAX}`;
+      searchInput.disabled = picked.length >= MAX;
+      searchInput.placeholder = picked.length >= MAX ? "Remove a school to add another" : "Search for a school, e.g. UCLA or Ohio State";
+      renderFavorites();
+    }
+
+    function renderFavorites() {
+      if (!session) {
+        favoritesBox.innerHTML = `<p class="muted small"><button type="button" class="link-btn" data-auth="signin">Sign in</button> to pick from your saved schools.</p>`;
+        return;
+      }
+      if (!savedSchools.length) {
+        favoritesBox.innerHTML = `<p class="muted small">Save schools with ♡ to pick them here.</p>`;
+        return;
+      }
+      const chosen = new Set(picked.map(s => s.id));
+      favoritesBox.innerHTML = `<p class="muted small">From your saved schools:</p><div class="favorite-picks">
+        ${savedSchools.map(s => `<button type="button" class="pill" data-add="${s.school_id}"
+            ${chosen.has(s.school_id) || picked.length >= MAX ? "disabled" : ""}>＋ ${escapeHtml(s.name)}</button>`).join("")}
+      </div>`;
+    }
+
+    function addSchool(school) {
+      if (picked.length >= MAX || picked.some(s => s.id === school.id)) return;
+      picked.push(school);
+      searchInput.value = "";
+      resultsEl.hidden = true;
+      update();
+    }
+
+    function update() {
+      renderPicked();
+      syncUrl();
+      loadComparison();
+    }
+
+    function cellText(cell, format) {
+      return cell.value == null ? "Not reported" : FORMAT[format](cell.value);
+    }
+
+    async function loadComparison() {
+      if (picked.length < 2) {
+        comparison.hidden = true;
+        return;
+      }
+      comparison.hidden = false;
+      comparison.innerHTML = `<p class="muted">Comparing...</p>`;
+      try {
+        const res = await fetch(`/api/compare?ids=${picked.map(s => s.id).join(",")}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Couldn't compare these schools.");
+        const head = `<tr><th>Measure</th>${data.schools.map(s => `<th>
+            <a href="${s.url}">${escapeHtml(s.name)}</a><div class="muted small">${escapeHtml([s.city, s.state].join(", "))} · ${escapeHtml(s.type || "")}</div>
+          </th>`).join("")}</tr>`;
+        const body = data.rows.map(row => `<tr><td>${escapeHtml(row.label)}${row.better ? `<span class="hint">${row.better} is better</span>` : ""}</td>
+          ${row.cells.map(c => `<td class="${c.best ? "best" : ""} ${c.worst ? "worst" : ""}">${escapeHtml(cellText(c, row.format))}</td>`).join("")}
+        </tr>`).join("");
+        comparison.innerHTML = `<div class="panel-head"><h3>Side by side</h3>
+            <div class="legend"><span class="g">Better</span><span class="r">Worse</span></div></div>
+          <div class="table-wrap"><table class="compare-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+          <p class="muted small">Sources: College Scorecard, IPEDS, Clery Act data, CollegeCopilot Score, user reviews.</p>`;
+      } catch (err) {
+        comparison.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    let searchTimer = null;
+    searchInput.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      const q = searchInput.value.trim();
+      if (q.length < 2) { resultsEl.hidden = true; return; }
+      searchTimer = setTimeout(async () => {
+        const { schools } = await (await fetch(`/api/schools/search?q=${encodeURIComponent(q)}`)).json();
+        const options = schools.filter(s => !picked.some(p => p.id === s.id));
+        searchResults = Object.fromEntries(options.map(s => [s.id, s]));
+        resultsEl.innerHTML = options.length
+          ? options.map(s => `<button type="button" role="option" data-pick="${s.id}">
+              ${escapeHtml(s.name)}<span class="place">${escapeHtml([s.city, s.state].filter(Boolean).join(", "))}</span></button>`).join("")
+          : `<div class="muted small" style="padding:10px 14px">No schools found.</div>`;
+        resultsEl.hidden = false;
+      }, 200);
+    });
+    searchInput.addEventListener("keydown", event => {
+      if (event.key === "Escape") resultsEl.hidden = true;
+      if (event.key === "Enter") resultsEl.querySelector("button")?.click();
+    });
+    document.addEventListener("click", event => {
+      const option = event.target.closest("[data-pick]");
+      if (option) addSchool(searchResults[option.dataset.pick]);
+      const remove = event.target.closest("[data-remove]");
+      if (remove) {
+        picked.splice(picked.findIndex(s => s.id === Number(remove.dataset.remove)), 1);
+        update();
+      }
+      const add = event.target.closest("[data-add]");
+      if (add) {
+        const s = savedSchools.find(x => x.school_id === Number(add.dataset.add));
+        addSchool({ id: s.school_id, name: s.name, city: s.city, state: s.state });
+      }
+      if (!event.target.closest(".search")) resultsEl.hidden = true;
+    });
+
+    window.onAuthChanged = async () => {
+      savedSchools = [];
+      if (session) {
+        try { savedSchools = (await api("/me/favorites")).favorites; } catch { /* handled by api() */ }
+      }
+      renderFavorites();
+    };
+
+    async function start() {
+      const ids = (new URLSearchParams(location.search).get("ids") || "").split(",").map(Number).filter(Boolean).slice(0, MAX);
+      if (ids.length) {
+        const res = await fetch(`/api/schools/basic?ids=${ids.join(",")}`);
+        if (res.ok) picked.push(...(await res.json()).schools);
+      }
+      update();
+      initAuth();
+    }
+    start();
+  </script>
+</body>
+</html>

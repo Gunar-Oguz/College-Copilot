@@ -51,6 +51,8 @@ COLUMNS = {
     "female_share": ("Women", "percent", None),
     "distance_miles": ("Distance", "miles", None),
     "value_ratio": ("Earnings per $1 of net price", "number", "higher"),
+    "copilot_score": ("CollegeCopilot Score", "score100", "higher"),
+    "copilot_rank": ("CollegeCopilot rank", "rank", None),
     "criminal_offenses_per_1000_students": ("Crimes per 1,000 students", "number", "lower"),
     "similarity": ("Similarity", "score", "higher"),
     "similar_on": ("Similar on", "list", None),
@@ -112,6 +114,10 @@ def format_value(value, fmt: str) -> str:
         return f"{number:,.1f} mi"
     if fmt == "score":
         return f"{number * 100:.0f}%"
+    if fmt == "score100":
+        return f"{number:.1f}"
+    if fmt == "rank":
+        return f"#{number:,.0f}"
     return f"{number:,.0f}" if number == int(number) else f"{number:,.2f}"
 
 

@@ -12,15 +12,18 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import admin_page
 import app_logs
+import photos
 import user_data
 from database import execute_sql, get_data_sources, get_latest_year
-from guardrails import check_answer, ranking_basis
+from guardrails import check_answer, ranking_basis, schools_named_in
 from planner import plan_answer
 from presentation import build_blocks, unsupported_numbers
+from school_profile import compare_schools, school_basics, school_profile, search_schools
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,12 +40,14 @@ async def lifespan(_app: FastAPI):
     try:
         user_data.ensure_user_tables()
         app_logs.ensure_log_tables()
+        photos.ensure_photo_table()
     except psycopg2.Error as e:
         logger.error("Could not create user or log tables: %s", e)
     yield
 
 
 app = FastAPI(title="CollegeCopilot", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
@@ -65,6 +70,7 @@ class AskResponse(BaseModel):
     source: str | None = None
     schools_considered: int = 0
     log_id: int | None = None  # for thumbs up/down
+    fallback: dict | None = None  # for "can't answer": what we do know, and questions we can answer
 
 
 SUMMARY_SYSTEM_PROMPT = """You are CollegeCopilot. Write a one- or two-sentence summary that
@@ -87,6 +93,13 @@ NO_ANSWER_MESSAGE = (
     "I don't know. That question can't be answered from the data I have "
     "(College Scorecard, IPEDS and other public sources)."
 )
+NO_ANSWER_FOR_SCHOOL = "I don't have data to answer that, but here's what I do know about {name}."
+GENERAL_SUGGESTIONS = [
+    "Top 10 universities in California by graduation rate",
+    "Which colleges have the highest economic mobility?",
+    "What jobs can a computer science major get?",
+    "Compare Harvard and Yale on cost and outcomes",
+]
 NO_RESULTS_MESSAGE = "I couldn't find data matching your question. Try rephrasing?"
 
 _client = None
@@ -160,13 +173,31 @@ def health():
 SUMMARY_ROW_LIMIT = 100
 
 
+def cannot_answer_response(question: str, school_ids: list[int]) -> AskResponse:
+    """'I don't know', plus what we do know about the school and questions we can answer."""
+    school = school_basics(school_ids[:1])
+    if not school:
+        return AskResponse(question=question, kind="cannot_answer", response=NO_ANSWER_MESSAGE,
+                           fallback={"school": None, "suggestions": GENERAL_SUGGESTIONS})
+    name = school[0]["name"]
+    suggestions = [
+        f"What is the graduation rate at {name}?",
+        f"How much does {name} cost for a family making $75,000?",
+        f"Find 5 schools similar to {name}",
+        f"Show me campus crime at {name}",
+    ]
+    return AskResponse(question=question, kind="cannot_answer", response=NO_ANSWER_FOR_SCHOOL.format(name=name),
+                       fallback={"school": school[0], "suggestions": suggestions})
+
+
 def answer_question(question: str) -> tuple[AskResponse, list[dict], str]:
     """The answer, the rows behind it, and the SQL or tool call that produced them."""
     answer = plan_answer(question)
     logger.info("Plan: kind=%s trace=%s", answer.kind, answer.trace)
     trace = "\n".join(answer.trace)
     if answer.kind == "cannot_answer":
-        return AskResponse(question=question, kind="cannot_answer", response=NO_ANSWER_MESSAGE), [], trace
+        school_ids = answer.school_ids or schools_named_in(question)
+        return cannot_answer_response(question, school_ids), [], trace
     if answer.kind == "clarify":
         return AskResponse(question=question, kind="clarify", response=answer.clarification), [], trace
 
@@ -319,6 +350,90 @@ def remove_note(note_id: int, authorization: str | None = Header(default=None)):
     if not user_data.delete_note(_user_id(authorization), note_id):
         raise HTTPException(status_code=404, detail="Note not found")
     return {"deleted": True}
+
+
+class ReviewRequest(BaseModel):
+    rating: int
+    review_text: str = ""
+
+
+@app.get("/api/school/{unitid}")
+def school_api(unitid: int):
+    profile = school_profile(unitid)
+    if not profile:
+        raise HTTPException(status_code=404, detail="School not found")
+    return profile
+
+
+@app.get("/api/schools/search")
+def school_search(q: str = Query(default="", max_length=100)):
+    return {"schools": search_schools(q)}
+
+
+@app.get("/api/schools/basic")
+def schools_basic(ids: str = Query(..., max_length=200)):
+    try:
+        school_ids = [int(i) for i in ids.split(",") if i.strip()][:10]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ids must be numbers")
+    return {"schools": [{k: s[k] for k in ("id", "name", "city", "state", "type", "url")}
+                        for s in school_basics(school_ids)]}
+
+
+@app.get("/api/compare")
+def compare_api(ids: str = Query(..., description="2 or 3 comma-separated UNITIDs")):
+    try:
+        school_ids = list(dict.fromkeys(int(i) for i in ids.split(",") if i.strip()))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ids must be numbers")
+    if not 2 <= len(school_ids) <= 3:
+        raise HTTPException(status_code=400, detail="Pick 2 or 3 schools to compare")
+    result = compare_schools(school_ids)
+    if len(result["schools"]) != len(school_ids):
+        raise HTTPException(status_code=404, detail="School not found")
+    return result
+
+
+@app.get("/me/reviews/{unitid}")
+def get_my_review(unitid: int, authorization: str | None = Header(default=None)):
+    return {"review": user_data.my_review(_user_id(authorization), unitid)}
+
+
+@app.put("/me/reviews/{unitid}")
+def put_my_review(unitid: int, request: ReviewRequest, authorization: str | None = Header(default=None)):
+    user_id = _user_id(authorization)
+    if not 1 <= request.rating <= 5:
+        raise HTTPException(status_code=400, detail="Rating must be 1 to 5 stars")
+    text = request.review_text.strip()
+    if len(text) > user_data.REVIEW_TEXT_MAX:
+        raise HTTPException(status_code=400, detail="Review is too long (2,000 characters max)")
+    if not school_basics([unitid]):
+        raise HTTPException(status_code=404, detail="School not found")
+    return {"review": user_data.save_review(user_id, unitid, request.rating, text)}
+
+
+@app.delete("/me/reviews/{unitid}")
+def delete_my_review(unitid: int, authorization: str | None = Header(default=None)):
+    if not user_data.delete_review(_user_id(authorization), unitid):
+        raise HTTPException(status_code=404, detail="Review not found")
+    return {"deleted": True}
+
+
+def _page(name: str) -> FileResponse:
+    path = FRONTEND_DIR / name
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Page not found")
+    return FileResponse(path)
+
+
+@app.get("/school/{unitid}")
+def school_page(unitid: int):
+    return _page("school.html")
+
+
+@app.get("/compare")
+def compare_page():
+    return _page("compare.html")
 
 
 @app.get("/")

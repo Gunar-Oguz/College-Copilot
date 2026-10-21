@@ -16,7 +16,7 @@ import time
 import requests
 from psycopg2.extras import RealDictCursor
 
-from database import get_db_connection
+from database import execute_sql, get_db_connection
 
 TOKEN_CACHE_SEC = 300
 _token_cache: dict[str, tuple[float, dict]] = {}
@@ -37,6 +37,17 @@ CREATE TABLE IF NOT EXISTS user_notes (
 );
 CREATE INDEX IF NOT EXISTS user_notes_user_school_idx ON user_notes (user_id, unitid);
 
+CREATE TABLE IF NOT EXISTS user_reviews (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    unitid INTEGER NOT NULL,
+    rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    review_text TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS user_reviews_one_per_school ON user_reviews (user_id, unitid);
+CREATE INDEX IF NOT EXISTS user_reviews_school_idx ON user_reviews (unitid, created_at);
+
 ALTER TABLE user_favorites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_favorites FORCE ROW LEVEL SECURITY;
 ALTER TABLE user_notes ENABLE ROW LEVEL SECURITY;
@@ -50,7 +61,25 @@ DROP POLICY IF EXISTS own_rows ON user_notes;
 CREATE POLICY own_rows ON user_notes
     USING (user_id = current_setting('app.user_id', true))
     WITH CHECK (user_id = current_setting('app.user_id', true));
+
+-- Reviews are public to read; only their author can add, change or delete them.
+ALTER TABLE user_reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_reviews FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS read_all ON user_reviews;
+CREATE POLICY read_all ON user_reviews FOR SELECT USING (true);
+DROP POLICY IF EXISTS own_insert ON user_reviews;
+CREATE POLICY own_insert ON user_reviews FOR INSERT
+    WITH CHECK (user_id = current_setting('app.user_id', true));
+DROP POLICY IF EXISTS own_update ON user_reviews;
+CREATE POLICY own_update ON user_reviews FOR UPDATE
+    USING (user_id = current_setting('app.user_id', true))
+    WITH CHECK (user_id = current_setting('app.user_id', true));
+DROP POLICY IF EXISTS own_delete ON user_reviews;
+CREATE POLICY own_delete ON user_reviews FOR DELETE
+    USING (user_id = current_setting('app.user_id', true));
 """
+
+REVIEW_TEXT_MAX = 2000
 
 FAVORITES_SQL = """
 SELECT f.unitid AS school_id, s.name, s.city, s.state, s.ownership, s.admission_rate,
@@ -155,3 +184,43 @@ def update_note(user_id: str, note_id: int, text: str) -> dict | None:
 def delete_note(user_id: str, note_id: int) -> bool:
     return bool(_run(user_id, "DELETE FROM user_notes WHERE id = %s AND user_id = %s RETURNING id",
                      (note_id, user_id)))
+
+
+def review_summary(unitid: int, limit: int = 10) -> dict:
+    """Average rating, count and recent reviews for a school (public; no user ids)."""
+    totals = execute_sql(
+        "SELECT round(avg(rating), 1) AS average, count(*) AS count FROM user_reviews WHERE unitid = %s",
+        (unitid,),
+    )[0]
+    recent = execute_sql(
+        "SELECT rating, review_text, created_at FROM user_reviews WHERE unitid = %s "
+        "ORDER BY created_at DESC LIMIT %s",
+        (unitid, limit),
+    )
+    return {"average": totals["average"], "count": totals["count"], "recent": recent}
+
+
+def my_review(user_id: str, unitid: int) -> dict | None:
+    rows = _run(user_id, "SELECT rating, review_text, created_at FROM user_reviews "
+                         "WHERE user_id = %s AND unitid = %s", (user_id, unitid))
+    return rows[0] if rows else None
+
+
+def save_review(user_id: str, unitid: int, rating: int, text: str) -> dict:
+    """Add or replace the user's review of a school."""
+    rows = _run(
+        user_id,
+        """
+        INSERT INTO user_reviews (user_id, unitid, rating, review_text) VALUES (%s, %s, %s, %s)
+        ON CONFLICT (user_id, unitid) DO UPDATE
+            SET rating = EXCLUDED.rating, review_text = EXCLUDED.review_text, created_at = NOW()
+        RETURNING rating, review_text, created_at
+        """,
+        (user_id, unitid, rating, text or None),
+    )
+    return rows[0]
+
+
+def delete_review(user_id: str, unitid: int) -> bool:
+    return bool(_run(user_id, "DELETE FROM user_reviews WHERE user_id = %s AND unitid = %s RETURNING id",
+                     (user_id, unitid)))

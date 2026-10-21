@@ -1,0 +1,78 @@
+/* Layout for the scrolling pages (school profiles, compare). */
+
+body.page {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+}
+
+header .brand { display: flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; }
+a.header-btn { text-decoration: none; display: inline-block; }
+
+.page-main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 20px 16px calc(48px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-title { font-size: 1.5rem; letter-spacing: -0.03em; }
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.panel h3 { font-size: 1rem; letter-spacing: -0.01em; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.muted { color: var(--muted); }
+.small { font-size: 0.78rem; }
+.loading-line { color: var(--muted); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.stat { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
+.stat .label { font-size: 0.78rem; color: var(--muted); }
+.stat .value { font-size: 1.3rem; font-weight: 650; letter-spacing: -0.02em; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.stat .value.missing { font-size: 0.9rem; font-weight: 500; color: var(--muted); }
+
+.pill, .save-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  align-self: auto;
+}
+.pill:hover, .save-pill:hover { border-color: var(--brand); background: var(--brand-soft); opacity: 1; }
+.save-pill[aria-pressed="true"] { color: #be123c; border-color: #fecdd3; background: #fff1f2; }
+
+.table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--surface-2); font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+
+.link-btn.danger { color: #be123c; }
+
+@media (max-width: 640px) {
+  .page-main { padding: 14px 12px 40px; gap: 12px; }
+  .panel { padding: 14px 12px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .stat .value { font-size: 1.1rem; }
+  th, td { padding: 7px 10px; }
+}

@@ -17,7 +17,7 @@ _FORBIDDEN_PATTERNS = [
     r"\binto\b",
     r"set_config",
     r"\bu&['\"]",  # unicode-escaped names could spell a blocked word
-    r"\buser_(favorites|notes)\b",  # private per-user data
+    r"\buser_(favorites|notes|reviews)\b",  # per-user data
     r"\b(query_logs|feedback)\b",  # other people's questions
 ]
 

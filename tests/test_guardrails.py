@@ -84,3 +84,21 @@ def test_college_lists_drop_non_degree_programs():
     assert "Left out 1" in notes[0]
     kept, _ = check_answer("Top schools in California by graduation rate", rows, "")
     assert len(kept) == 2  # "schools" keeps every institution
+
+
+def test_score_rankings_explain_the_formula():
+    rows = [{"name": "A"}, {"name": "B"}]
+    _, notes = check_answer("Best colleges in Ohio", rows, "SELECT ... ORDER BY schools.copilot_score DESC")
+    assert any("40% graduation rate" in n for n in notes)
+
+
+@pytest.mark.skipif(not _db_available(), reason="Postgres not reachable")
+@pytest.mark.parametrize("question,ids", [
+    ("What is the food like at UCLA?", [110662]),
+    ("Is the University of Michigan a party school?", [170976]),
+    ("Which colleges have the best dorms?", []),
+    ("What is Columbia College like?", []),  # ambiguous: several Columbia Colleges
+])
+def test_schools_named_in(question, ids):
+    from guardrails import schools_named_in
+    assert schools_named_in(question) == ids

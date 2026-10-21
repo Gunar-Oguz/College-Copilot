@@ -11,6 +11,8 @@ unless noted, keyed by `school_id` = IPEDS UNITID = `schools.id`. Rates are deci
 | `area_wages` | [BLS Occupational Employment and Wage Statistics (metro areas)](https://www.bls.gov/oes/tables.htm) | May 2025 | 5,141 | 4,838 |
 | `occupations` | [BLS Occupational Employment and Wage Statistics and Employment Projections; O*NET 31.0](https://www.bls.gov/oes/tables.htm) | May 2025 wages; 2025-35 projections | 831 | 0 |
 | `campus_crime` | [Campus Safety and Security (Clery Act), U.S. Department of Education](https://ope.ed.gov/campussafety/) | Calendar year 2024 | 5,585 | 5,561 |
+| `copilot_scores` | [CollegeCopilot Score (computed from College Scorecard and IPEDS)](https://github.com/Gunar-Oguz/College-Copilot/blob/main/backend/compute_scores.py) | 2024-25 | 3,081 | 3,081 |
+| `school_deadlines` | [Common App 2026-27 deadline grid and official admissions pages](https://content.commonapp.org/Files/ReqGrid.pdf) | Fall 2027 entry | 213 | 0 |
 | `accreditation` | [DAPIP, U.S. Department of Education](https://ope.ed.gov/dapip/) | as of Oct 2026 | 6,116 | 5,331 |
 | `program_accreditation` | [DAPIP, U.S. Department of Education](https://ope.ed.gov/dapip/) | as of Oct 2026 | 11,042 | 2,604 |
 | `irs_990` | [Data from ProPublica Nonprofit Explorer (IRS Form 990)](https://projects.propublica.org/nonprofits/api) | mostly tax year 2023 (latest filing per school) | 1,562 | 1,521 |
@@ -127,6 +129,41 @@ Loaded 2026-10-20.
 | `residence_hall_offenses_total` | integer | Criminal offenses in on-campus student housing in 2024 (a subset of criminal_offenses_total) |
 | `residence_hall_sex_offenses_total` | integer | Sex offenses (rape, fondling, incest, statutory rape) in on-campus student housing in 2024 |
 | `residence_hall_burglary_count` | integer | Burglaries in on-campus student housing in 2024 |
+
+## `copilot_scores`
+
+CollegeCopilot Score: our composite ranking of degree-granting colleges. Use it for 'top ranked' / 'best' questions. Also stored as schools.copilot_score (latest year).
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `school_id` | integer | IPEDS UNITID, joins to schools.id |
+| `copilot_score` | numeric | CollegeCopilot Score 0-100 (higher is better): 40% graduation rate, 30% median earnings, 20% selectivity, 10% student-faculty ratio, each as a percentile |
+| `copilot_rank` | integer | National rank by CollegeCopilot Score (1 = best) |
+| `graduation_score` | numeric | Graduation rate percentile 0-100 (40% of the score) |
+| `earnings_score` | numeric | Median 10-year earnings percentile 0-100 (30% of the score) |
+| `selectivity_score` | numeric | Selectivity percentile 0-100, lower acceptance rate scores higher (20%) |
+| `student_faculty_score` | numeric | Student-faculty ratio percentile 0-100, smaller ratio scores higher (10%) |
+| `completion_rate` | numeric | Graduation rate used for the score |
+| `earnings_median_10yr` | integer | Median earnings 10 years after entry used for the score |
+| `acceptance_rate` | numeric | Acceptance rate used for the score (1.0 for open-admission schools) |
+| `student_faculty_ratio` | numeric | Students per faculty member used for the score |
+
+## `school_deadlines`
+
+Application deadlines for about 115 colleges (Ivy League, flagships, largest schools), Fall 2027 cycle. Several rows per school, one per deadline type.
+
+Loaded 2026-10-20.
+
+| Column | Type | Description |
+|---|---|---|
+| `unitid` | integer | IPEDS UNITID, joins to schools.id |
+| `deadline_type` | text | early_decision, early_decision_2, early_action, restrictive_early_action, regular, rolling or priority |
+| `deadline_date` | date | Application deadline for the cycle; NULL for rolling admission with no date |
+| `notes` | text | Details, e.g. 'Early Action II' or 'UC application' |
+| `source_url` | text | Official page or Common App grid where the date was confirmed |
+| `cycle` | text | Entry term the deadline is for, e.g. 'Fall 2027' |
 
 ## `accreditation`
 
