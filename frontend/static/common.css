@@ -364,3 +364,35 @@ dialog.upgrade .upgrade-list li::before { content: "✓"; color: #059669; font-w
 .locked-feature b { color: var(--text); }
 .locked-feature .lock { font-size: 1rem; }
 .locked-feature a, .locked-feature button.link-btn { margin-left: auto; white-space: nowrap; }
+
+/* App navigation tabs */
+.app-nav { display: flex; align-items: center; gap: 4px; margin-left: 20px; }
+.app-nav a {
+  color: rgba(255, 255, 255, 0.78);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.app-nav a:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.app-nav a.active { color: #fff; background: rgba(255, 255, 255, 0.18); }
+.app-nav a:focus-visible { outline: 2px solid #fcd34d; outline-offset: 2px; }
+.app-nav .saved-count[hidden] { display: none; }
+
+@media (max-width: 760px) {
+  header .header-inner { flex-wrap: wrap; row-gap: 8px; }
+  .app-nav {
+    order: 10;
+    flex-basis: 100%;
+    margin: 0 -4px;
+    justify-content: space-between;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    padding-top: 6px;
+  }
+  .app-nav a { padding: 6px 10px; font-size: 0.85rem; }
+}
+a.header-btn { text-decoration: none; display: inline-block; }
+.header-btn { white-space: nowrap; }
+body.has-app-nav header .header-inner p { display: none; }

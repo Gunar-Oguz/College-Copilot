@@ -296,7 +296,10 @@ function refreshHearts() {
     btn.textContent = saved ? "♥" : "♡";
   });
   const count = document.getElementById("saved-count");
-  if (count) count.textContent = favorites.size;
+  if (count) {
+    count.textContent = favorites.size;
+    count.hidden = !session || favorites.size === 0;
+  }
 }
 
 async function loadFavoriteIds() {
@@ -455,11 +458,53 @@ authDialog.addEventListener("click", event => { if (event.target === authDialog)
 authForm.addEventListener("submit", submitAuth);
 document.getElementById("google-btn").addEventListener("click", signInWithGoogle);
 
-document.getElementById("saved-btn")?.addEventListener("click", () => {
-  if (location.pathname !== "/chat") location.href = "/chat#saved";
-  else if (location.hash === "#saved") window.onSavedClick?.();
+// ---------- App navigation (chat, school profiles, compare, pricing) ----------
+
+const NAV_TABS = [
+  { key: "ask", label: "Ask", href: "/chat" },
+  { key: "compare", label: "Compare", href: "/compare" },
+  { key: "saved", label: "My Schools", href: "/chat#saved" },
+  { key: "pricing", label: "Pricing", href: "/pricing" },
+];
+
+function currentTab() {
+  if (location.pathname === "/chat") return location.hash === "#saved" ? "saved" : "ask";
+  if (location.pathname === "/compare") return "compare";
+  if (location.pathname === "/pricing") return "pricing";
+  return null;  // school profiles: no tab is current
+}
+
+function renderAppNav() {
+  const inner = document.querySelector("header .header-inner");
+  const appPage = ["/chat", "/compare", "/pricing"].includes(location.pathname) || location.pathname.startsWith("/school/");
+  if (!inner || !appPage || document.getElementById("app-nav")) return;
+  const tabs = NAV_TABS.map(tab => `<a href="${tab.href}" data-tab="${tab.key}">${tab.label}${
+    tab.key === "saved" ? `<span class="saved-count" id="saved-count" hidden>0</span>` : ""}</a>`).join("");
+  const brand = inner.querySelector(".brand") || inner.querySelector("div");
+  brand.insertAdjacentHTML("afterend", `<nav class="app-nav" id="app-nav" aria-label="Main">${tabs}</nav>`);
+  document.body.classList.add("has-app-nav");
+  updateNavActive();
+}
+
+function updateNavActive() {
+  const active = currentTab();
+  document.querySelectorAll("#app-nav a").forEach(link => {
+    const on = link.dataset.tab === active;
+    link.classList.toggle("active", on);
+    if (on) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+}
+
+document.addEventListener("click", event => {
+  const tab = event.target.closest('#app-nav a[data-tab="saved"]');
+  if (!tab || location.pathname !== "/chat") return;
+  event.preventDefault();  // on the chat page, switch views without reloading
+  if (location.hash === "#saved") window.onSavedClick?.();
   else location.hash = "saved";
 });
+window.addEventListener("hashchange", updateNavActive);
+renderAppNav();
 
 document.getElementById("upgrade-close").addEventListener("click", () => document.getElementById("upgrade-dialog").close());
 document.getElementById("upgrade-later").addEventListener("click", () => document.getElementById("upgrade-dialog").close());
