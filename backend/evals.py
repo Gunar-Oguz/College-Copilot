@@ -149,6 +149,14 @@ def summary_names_first_row():
     return check
 
 
+def fallback_school(school_id):
+    def check(resp, rows):
+        school = (resp.fallback or {}).get("school") or {}
+        ok = school.get("id") == school_id and bool(resp.fallback.get("suggestions"))
+        return ok, f"fallback was {resp.fallback}"
+    return check
+
+
 def block_type(expected):
     def check(resp, rows):
         types = [b["type"] for b in resp.blocks]
@@ -156,11 +164,19 @@ def block_type(expected):
     return check
 
 
-def program_name_contains(word):
+def program_name_contains(word, cip_prefix):
+    """Rows are for this program: by program_name, or (if not selected) the query filters its CIP code."""
     def check(resp, rows):
-        names = [str(r.get("program_name", "")) for r in rows[:10]]
-        return bool(names) and all(word.lower() in n.lower() for n in names), f"programs: {names[:5]}"
+        if rows and "program_name" in rows[0]:
+            names = [str(r.get("program_name", "")) for r in rows[:10]]
+            return all(word.lower() in n.lower() for n in names), f"programs: {names[:5]}"
+        return cip_prefix in rows.sql, f"no program_name and query doesn't filter cip {cip_prefix}"
     return check
+
+
+class Rows(list):
+    """Result rows plus the SQL that produced them (for checks that need it)."""
+    sql = ""
 
 
 DEGREE_GRANTING = all_schools_where("highest_degree >= 2", "degree-granting")
@@ -175,8 +191,8 @@ CASES = [
      [kind("result"), sorted_by(["cost_avg_net_price", "tuition_fees_in_state"], "asc"),
       names_in_top(["Merced"], 3), summary_names_first_row()]),
     ("highest-paid-cs", "majors", "Highest paid CS graduates",
-     [kind("result"), program_name_contains("Computer"),
-      sorted_by(["earnings_median_4yr", r"earnings?_4yr", "earnings_median_1yr", r"earnings?_1yr"], "desc")]),
+     [kind("result"), program_name_contains("Computer", "11.07"),
+      sorted_by([r"\w*earnings\w*4yr", r"\w*earnings\w*1yr"], "desc")]),
     ("compare-stanford-mit", "comparisons", "Compare Stanford and MIT",
      [kind("result"), includes_ids(STANFORD, MIT), block_type("compare")]),
     ("grad-rate-ucla", "outcomes", "Graduation rate at UCLA",
@@ -190,9 +206,12 @@ CASES = [
      [kind("result"), sorted_by(["admission_rate"], "asc"), all_schools_where("state = 'CA'", "in CA"),
       names_in_top(["California Institute of Technology", "Stanford"], 3)]),
     ("best-ohio", "rankings", "Best colleges in Ohio",
-     [kind("result"), sorted_by(["completion_rate"], "desc"), DEGREE_GRANTING,
-      all_schools_where("state = 'OH'", "in OH"), text_contains("no official ranking", where="notes"),
+     [kind("result"), sorted_by(["copilot_score"], "desc"), DEGREE_GRANTING,
+      all_schools_where("state = 'OH'", "in OH"), text_contains("CollegeCopilot Score", where="notes"),
       summary_names_first_row()]),
+    ("best-national", "rankings", "What are the 10 best colleges in the country?",
+     [kind("result"), row_count(10, 10), sorted_by(["copilot_score"], "desc"),
+      names_in_top(["Massachusetts Institute of Technology", "Princeton"], 3)]),
     ("top10-ca-universities", "rankings", "Top 10 universities in California by graduation rate",
      [kind("result"), row_count(10, 10), UNIVERSITIES, sorted_by(["completion_rate"], "desc")]),
     ("top5-ca-public-colleges", "rankings", "Top 5 public colleges in California by graduation rate",
@@ -225,8 +244,8 @@ CASES = [
 
     # Majors and careers
     ("nursing-earnings", "majors", "Which schools have the highest earnings for nursing graduates?",
-     [kind("result"), program_name_contains("Nurs"),
-      sorted_by(["earnings_median_4yr", r"earnings?_4yr", "earnings_median_1yr", r"earnings?_1yr"], "desc")]),
+     [kind("result"), program_name_contains("Nurs", "51.38"),
+      sorted_by([r"\w*earnings\w*4yr", r"\w*earnings\w*1yr"], "desc")]),
     ("cs-jobs", "majors", "What jobs can a computer science major get?",
      [kind("result"), has_column("median_annual_salary", r"\w*salary\w*"), names_in_top(["Software Developers"], 15)]),
     ("fastest-job", "majors", "What is the fastest growing occupation?",
@@ -256,6 +275,14 @@ CASES = [
     ("fewer-than-asked", "guardrails", "Top 10 public universities in Wyoming by graduation rate",
      [kind("result"), row_count(1, 9), text_contains("fewer than the 10", where="notes")]),
     ("ambiguous-columbia", "guardrails", "What is Columbia College's graduation rate?", [kind("clarify")]),
+    ("fallback-ucla-food", "guardrails", "What is the food like at UCLA?",
+     [kind("cannot_answer"), fallback_school(UCLA), text_contains("University of California-Los Angeles")]),
+
+    # Deadlines and the CollegeCopilot Score
+    ("harvard-early", "deadlines", "When is Harvard's early action deadline?",
+     [kind("result"), text_contains("November 1")]),
+    ("ucla-score", "rankings", "What is UCLA's CollegeCopilot Score?",
+     [kind("result"), value_matches(f"SELECT copilot_score AS value FROM copilot_scores WHERE school_id = {UCLA}")]),
 ]
 
 
@@ -263,7 +290,9 @@ def run_case(case):
     case_id, category, question, checks = case
     started = time.monotonic()
     try:
-        resp, rows, _sql = answer_question(question)
+        resp, rows, sql = answer_question(question)
+        rows = Rows(rows)
+        rows.sql = sql or ""
     except Exception as exc:  # report and keep going
         return case_id, category, False, f"error: {exc}", time.monotonic() - started
     failures = []

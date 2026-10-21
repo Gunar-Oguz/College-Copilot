@@ -63,8 +63,11 @@ COLUMN_NOTES = """
 - school_designations has one row per (school, designation); to require two designations join it twice.
 
 VOCABULARY (how to sort when the question uses these words and names no other measure):
-- "top ranked", "best", "top universities/colleges": the data has no official rankings; ORDER BY
-  schools.completion_rate DESC, schools.earnings_median_10yr DESC and select both columns.
+- "top ranked", "best", "top universities/colleges", "highest ranked": use our CollegeCopilot Score:
+  ORDER BY schools.copilot_score DESC (exclude NULLs) and select copilot_score plus
+  schools.completion_rate and schools.earnings_median_10yr. "Ranked" or "rank" of a named school:
+  copilot_scores.copilot_rank. For "the top/best/highest ranked X" (singular), still return the top 10
+  so the user sees how close the others are.
 - "most selective", "hardest to get into": ORDER BY schools.admission_rate ASC.
 - "cheapest", "most affordable", "low cost": ORDER BY schools.cost_avg_net_price ASC (what families
   pay after aid) and also select ipeds_costs.tuition_fees_in_state and tuition_fees_out_of_state.
@@ -181,6 +184,7 @@ class Answer:
     source: str = ""  # tool and input that produced the rows
     highlight: str | None = None  # column that answers the question
     trace: list[str] = field(default_factory=list)
+    school_ids: list[int] = field(default_factory=list)  # schools named in the question, if resolved
 
 
 _client = None
@@ -211,7 +215,8 @@ COLUMN NOTES:
 {COLUMN_NOTES}
 
 RULES:
-- For every specific school named in the question, call resolve_school and use the returned ids.
+- For every specific school named in the question, call resolve_school and use the returned ids
+  (also when you will submit cannot_answer).
   Never match school names with ILIKE or LIKE.
 - Use a candidate when it is the only one with the top score, or when the question makes clear
   which one is meant (e.g. by state). If several candidates fit equally, submit clarify with a
@@ -243,6 +248,7 @@ class _Session:
     def __init__(self):
         self.results: dict[str, tuple[str, list[dict]]] = {}
         self.trace: list[str] = []
+        self.school_ids: list[int] = []
 
     def _store(self, source: str, rows: list[dict]) -> str:
         result_id = f"r{len(self.results) + 1}"
@@ -256,7 +262,12 @@ class _Session:
         self.trace.append(f"{name}({json.dumps(args, default=str)})")
         try:
             if name == "resolve_school":
-                return json.dumps(resolve_school(args.get("name", "")), default=str)
+                candidates = resolve_school(args.get("name", ""))
+                unique = len(candidates) == 1 or (
+                    len(candidates) > 1 and candidates[0]["score"] > candidates[1]["score"])
+                if candidates and unique and candidates[0]["id"] not in self.school_ids:
+                    self.school_ids.append(candidates[0]["id"])
+                return json.dumps(candidates, default=str)
             if name == "resolve_location":
                 return json.dumps(resolve_location(args.get("place", ""), args.get("state")))
             if name == "net_price_column":
@@ -283,7 +294,7 @@ class _Session:
             if self.results and all(not rows for _, rows in self.results.values()):
                 source, rows = list(self.results.values())[-1]
                 return Answer("result", rows=rows, source=source, trace=self.trace)
-            return Answer("cannot_answer", trace=self.trace)
+            return Answer("cannot_answer", trace=self.trace, school_ids=self.school_ids)
         if kind == "clarify" and args.get("clarification"):
             return Answer("clarify", clarification=args["clarification"].strip(), trace=self.trace)
         if kind == "result" and args.get("result_id") in self.results:

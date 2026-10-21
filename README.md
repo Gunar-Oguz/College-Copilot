@@ -82,6 +82,8 @@ python load_irs990.py         # IRS Form 990 via ProPublica (private nonprofits;
 python load_careers.py        # BLS wages and projections, O*NET, CIP-to-occupation crosswalk, metro wages
 python load_census.py         # Census ACS demographics of each campus ZIP code
 python load_designations.py   # AACSB, Phi Beta Kappa, CTCL, QuestBridge, Posse lists
+python compute_scores.py      # CollegeCopilot Score (needs load_ipeds.py); rerun after reloading data
+python load_deadlines.py      # application deadlines from data/school_deadlines.csv
 python document_sources.py    # regenerate docs/DATA_SOURCES.md
 ```
 
@@ -124,6 +126,32 @@ Run one category with `python backend/evals.py safety`. Both suites exit non-zer
   acceptance rate (0% rates are reporting errors and skipped); cheapest → net price (tuition shown too);
   highest paying → 10-year earnings (program earnings for a major); safest → crimes per 1,000 students
   at schools with 1,000+ students; best value → earnings per $1 of net price.
+
+## CollegeCopilot Score
+
+Our own ranking of about 3,100 degree-granting colleges (`compute_scores.py`): 40% graduation rate,
+30% median earnings after 10 years, 20% selectivity (lower acceptance rate is better) and 10%
+student-faculty ratio (lower is better). Each metric becomes a 0-100 percentile among scored colleges, which
+is robust to outliers, unlike min-max scaling; open-admission schools count as admitting 100%. Stored in
+`copilot_scores` (score, national rank, the four component scores) and `schools.copilot_score`. "Best" and
+"top ranked" questions sort by it, and answers say how it is built.
+
+## School pages, compare, deadlines, reviews
+
+- **`/school/<unitid>`**: photo, CollegeCopilot Score with its breakdown, key stats, application deadlines,
+  majors by degree level, campus safety, reviews, and Save / Compare buttons (`school.html`, data from
+  `GET /api/school/<unitid>`).
+- **`/compare`**: pick 2-3 schools from your saved list or by search; the better value in each row is green
+  and the worse red. The selection is in the URL (`/compare?ids=110662,110635`), so comparisons can be shared.
+- **Deadlines:** `school_deadlines` (116 schools, Fall 2027 cycle) from the Common App 2026-27 deadline grid
+  and official admissions pages, each with its source URL. Update `data/school_deadlines.csv` each cycle.
+- **Reviews:** `user_reviews` (1-5 stars plus text, one per user per school; writing again edits it). Anyone can
+  read them; only signed-in users can write, and row-level security limits changes to the author.
+- **Photos:** `photos.py` finds a school's image through Wikidata (IPEDS id P1771, image P18) and Wikimedia
+  Commons on first view, caches it in `school_photos` (including "no photo"), and shows the author and license.
+- **"I don't know" answers** show what we do know about the school (planner lookup, or an exact name or
+  nickname found in the question), its website and profile, and questions we can answer.
+- Shared front-end code: `frontend/static/auth.js` (sign-in, Save hearts) and `common.css`.
 
 ## Logging, feedback and admin
 

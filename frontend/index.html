@@ -5,33 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>CollegeCopilot</title>
+  <link rel="stylesheet" href="/static/common.css">
   <style>
-    :root {
-      --bg: #f5f6fb;
-      --surface: #ffffff;
-      --surface-2: #f4f5fa;
-      --border: #e3e6ef;
-      --text: #111827;
-      --muted: #616a7d;
-      --brand: #3b3fd8;
-      --brand-dark: #1e1b6b;
-      --brand-soft: #eceeff;
-      --accent: #f59e0b;
-      --primary: var(--brand);
-      --user-bg: var(--brand);
-      --user-text: #ffffff;
-      --ai-bg: #eceef4;
-      --series-1: #4f55e3;
-      --track: #eef1f6;
-      --best-bg: #e8f5e9;
-      --best-text: #1b5e20;
-      --ref-bg: #fff6e5;
-      --ref-text: #7a4a00;
-      --radius: 18px;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
@@ -41,42 +16,6 @@
       display: flex;
       flex-direction: column;
     }
-
-    header {
-      background: linear-gradient(120deg, var(--brand-dark), #312e9e 60%, var(--brand));
-      color: #fff;
-      padding: 14px 20px;
-      padding-top: calc(14px + env(safe-area-inset-top, 0px));
-      flex-shrink: 0;
-      z-index: 50;
-      box-shadow: 0 2px 12px rgba(30, 27, 107, 0.25);
-    }
-
-    .header-inner {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      max-width: 880px;
-      margin: 0 auto;
-    }
-
-    .logo { width: 40px; height: 40px; flex-shrink: 0; display: block; }
-
-    header h1 { font-size: 1.2rem; font-weight: 750; letter-spacing: -0.02em; line-height: 1.2; }
-    header h1 .accent { color: #fcd34d; }
-    header p { font-size: 0.8rem; color: rgba(255, 255, 255, 0.78); }
-
-    .new-chat {
-      margin-left: auto;
-      background: rgba(255, 255, 255, 0.14);
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      color: #fff;
-      font-size: 0.8rem;
-      padding: 7px 12px;
-      border-radius: 999px;
-      align-self: center;
-    }
-    .new-chat:hover:not(:disabled) { background: rgba(255, 255, 255, 0.24); opacity: 1; }
 
     #chat {
       flex: 1;
@@ -222,6 +161,28 @@
     }
 
     .source { font-size: 0.75rem; color: var(--muted); }
+
+    .school-link { color: inherit; text-decoration: none; border-bottom: 1px dotted currentColor; }
+    .school-link:hover { color: var(--brand); }
+    .card.fallback { margin-top: 8px; }
+    .fallback-links { display: flex; gap: 16px; font-size: 0.85rem; font-weight: 600; }
+    .fallback-links a { color: var(--brand); }
+    .suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .suggestion {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      text-align: left;
+      white-space: normal;
+      align-self: auto;
+    }
+    .suggestion:hover:not(:disabled) { border-color: var(--brand); background: var(--brand-soft); opacity: 1; }
+    .saved-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    a.back-btn { text-decoration: none; display: inline-block; border-radius: 12px; font-weight: 600; }
 
     .answer-notes { display: flex; flex-direction: column; gap: 4px; }
     .answer-notes p {
@@ -450,135 +411,6 @@
       box-shadow: 0 0 0 3px rgba(59, 63, 216, 0.15);
     }
 
-    button {
-      padding: 12px 20px;
-      border: none;
-      border-radius: 12px;
-      background: var(--primary);
-      color: #fff;
-      font: inherit;
-      font-weight: 600;
-      font-size: 0.925rem;
-      cursor: pointer;
-      align-self: flex-end;
-      white-space: nowrap;
-    }
-
-    button:hover:not(:disabled) { opacity: 0.9; }
-    button:disabled { opacity: 0.55; cursor: not-allowed; }
-
-    /* Account controls in the header */
-    .account { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-    .account[hidden], .account [hidden] { display: none; }
-    .account .new-chat { margin-left: 0; }
-    .header-btn {
-      background: rgba(255, 255, 255, 0.14);
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      color: #fff;
-      font-size: 0.8rem;
-      padding: 7px 12px;
-      border-radius: 999px;
-      align-self: center;
-    }
-    .header-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.24); opacity: 1; }
-    .header-btn.primary { background: #fcd34d; border-color: #fcd34d; color: var(--brand-dark); }
-    .header-btn.primary:hover:not(:disabled) { background: #fde68a; }
-    .saved-count {
-      display: inline-block;
-      min-width: 18px;
-      margin-left: 4px;
-      padding: 0 5px;
-      border-radius: 999px;
-      background: #fcd34d;
-      color: var(--brand-dark);
-      font-size: 0.72rem;
-      line-height: 18px;
-    }
-    .user-email {
-      font-size: 0.78rem;
-      color: rgba(255, 255, 255, 0.78);
-      max-width: 180px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    /* Save (heart) buttons on results */
-    .save-btn {
-      background: none;
-      border: none;
-      padding: 2px 4px;
-      margin-right: 4px;
-      border-radius: 6px;
-      color: #a3a9b8;
-      font-size: 1rem;
-      line-height: 1;
-      vertical-align: -1px;
-      align-self: auto;
-    }
-    .save-btn:hover:not(:disabled) { color: #e11d48; background: #fff1f2; opacity: 1; }
-    .save-btn[aria-pressed="true"] { color: #e11d48; }
-    .save-btn:focus-visible { outline: 2px solid rgba(225, 29, 72, 0.4); }
-    .stats-title { display: flex; align-items: center; gap: 2px; }
-    .bar-row .name .save-btn { font-size: 0.9rem; padding: 0 3px; }
-    .sign-in-hint { font-size: 0.8rem; color: var(--muted); }
-    .link-btn {
-      background: none;
-      border: none;
-      padding: 0;
-      color: var(--brand);
-      font-size: inherit;
-      font-weight: 600;
-      text-decoration: underline;
-      align-self: auto;
-    }
-
-    /* Sign-in dialog */
-    dialog.auth {
-      border: none;
-      border-radius: 18px;
-      padding: 0;
-      width: min(400px, calc(100vw - 32px));
-      margin: auto;
-      box-shadow: 0 24px 60px rgba(17, 24, 39, 0.3);
-      color: var(--text);
-    }
-    dialog.auth::backdrop { background: rgba(17, 24, 39, 0.45); }
-    .auth-body { padding: 22px 22px 20px; display: flex; flex-direction: column; gap: 12px; }
-    .auth-head { display: flex; align-items: center; justify-content: space-between; }
-    .auth-head h2 { font-size: 1.15rem; letter-spacing: -0.02em; }
-    .auth-close { background: none; color: var(--muted); padding: 4px 8px; font-size: 1.2rem; align-self: auto; }
-    .auth-reason { font-size: 0.875rem; color: var(--muted); }
-    .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: 10px; padding: 3px; }
-    .auth-tabs button { background: none; color: var(--muted); padding: 8px; font-size: 0.875rem; border-radius: 8px; align-self: auto; }
-    .auth-tabs button[aria-selected="true"] { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(17, 24, 39, 0.1); }
-    .auth form { display: flex; flex-direction: column; gap: 10px; }
-    .auth label { font-size: 0.8rem; font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
-    .auth input {
-      font: inherit;
-      font-size: 16px;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-    }
-    .auth input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(59, 63, 216, 0.15); }
-    .auth form button[type="submit"] { align-self: stretch; margin-top: 2px; }
-    .auth-divider { display: flex; align-items: center; gap: 10px; font-size: 0.75rem; color: var(--muted); }
-    .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-    .google-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      background: #fff;
-      color: var(--text);
-      border: 1px solid var(--border);
-      align-self: stretch;
-    }
-    .google-btn:hover:not(:disabled) { background: var(--surface-2); opacity: 1; }
-    .auth-message { font-size: 0.85rem; border-radius: 10px; padding: 9px 12px; }
-    .auth-message.error { background: #fef2f2; color: #991b1b; }
-    .auth-message.info { background: #ecfdf5; color: #065f46; }
 
     /* My Saved Schools */
     #saved-view { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
@@ -610,33 +442,9 @@
     body.signed-in .sign-in-hint { display: none; }
     body.saved-page footer { display: none; }
 
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: 96px;
-      transform: translateX(-50%);
-      background: #111827;
-      color: #fff;
-      font-size: 0.85rem;
-      padding: 10px 16px;
-      border-radius: 999px;
-      z-index: 300;
-      box-shadow: 0 8px 24px rgba(17, 24, 39, 0.25);
-      max-width: calc(100vw - 32px);
-    }
-
     @media (max-width: 640px) {
-      header { padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); }
-      .user-email, .header-btn.signup, .btn-label { display: none; }
-      .new-chat { padding: 6px 11px; font-size: 0.9rem; }
-      .account { gap: 6px; }
-      header h1 { font-size: 1rem; }
-      .header-btn { padding: 6px 10px; }
       .saved-card { padding: 14px 12px; }
       .note-form { flex-direction: column; align-items: stretch; }
-      .logo { width: 34px; height: 34px; }
-      header h1 { font-size: 1.05rem; }
-      header p { display: none; }
       #chat { padding: 12px 12px 100px; }
       .empty-state { margin-top: 12px; }
       .empty-state h2 { font-size: 1.3rem; }
@@ -712,30 +520,6 @@
     <section id="saved-view" hidden aria-labelledby="saved-title"></section>
   </main>
 
-  <dialog class="auth" id="auth-dialog" aria-labelledby="auth-title">
-    <div class="auth-body">
-      <div class="auth-head">
-        <h2 id="auth-title">Welcome to CollegeCopilot</h2>
-        <button type="button" class="auth-close" id="auth-close" aria-label="Close">×</button>
-      </div>
-      <p class="auth-reason" id="auth-reason">Sign in to save schools and keep notes on them.</p>
-      <div class="auth-tabs" role="tablist">
-        <button type="button" role="tab" id="tab-signin" aria-selected="true">Sign in</button>
-        <button type="button" role="tab" id="tab-signup" aria-selected="false">Create account</button>
-      </div>
-      <form id="auth-form" novalidate>
-        <label>Email <input type="email" id="auth-email" autocomplete="email" required></label>
-        <label>Password <input type="password" id="auth-password" autocomplete="current-password" minlength="6" required></label>
-        <button type="submit" id="auth-submit">Sign in</button>
-      </form>
-      <div class="auth-divider">or</div>
-      <button type="button" class="google-btn" id="google-btn">
-        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
-        Continue with Google
-      </button>
-      <div class="auth-message" id="auth-message" role="alert" hidden></div>
-    </div>
-  </dialog>
 
   <footer>
     <div class="input-row">
@@ -745,6 +529,7 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+  <script src="/static/auth.js"></script>
   <script>
     const API_URL = "/ask";
     const chat = document.getElementById("chat");
@@ -755,31 +540,9 @@
     const newChatBtn = document.getElementById("new-chat");
     const footer = document.querySelector("footer");
     const savedView = document.getElementById("saved-view");
-    const authDialog = document.getElementById("auth-dialog");
-    const authForm = document.getElementById("auth-form");
-    const authMessage = document.getElementById("auth-message");
-
-    let sb = null;            // Supabase client, once /config says sign-in is set up
-    let session = null;       // current Supabase session
-    let authReady = false;    // sign-in is available on this server
-    let googleEnabled = false;
-    let authMode = "signin";
-    const favorites = new Set();
-
-    function escapeHtml(text) {
-      return String(text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-    }
-
-    // Heart button for a school; its state comes from the signed-in user's favorites.
-    function saveButton(schoolId, name) {
-      if (!schoolId || !authReady) return "";
-      const saved = favorites.has(schoolId);
-      return `<button type="button" class="save-btn" data-school-id="${schoolId}"
-        aria-pressed="${saved}" aria-label="Save ${escapeHtml(name)}" title="Save school">${saved ? "♥" : "♡"}</button>`;
+    // A school's name, linked to its profile page when we know which school it is.
+    function schoolName(schoolId, name) {
+      return schoolId ? `<a class="school-link" href="/school/${schoolId}">${escapeHtml(name)}</a>` : escapeHtml(name);
     }
 
     function renderStats(block) {
@@ -791,7 +554,7 @@
         </div>`;
       }).join("");
       const title = block.title
-        ? `<div class="block-title stats-title">${saveButton(block.school_id, block.title)}${escapeHtml(block.title)}</div>`
+        ? `<div class="block-title stats-title">${saveButton(block.school_id, block.title)}${schoolName(block.school_id, block.title)}</div>`
         : "";
       return `<section>${title}<div class="stats">${tiles}</div></section>`;
     }
@@ -801,7 +564,7 @@
         const pct = Math.max(0, (item.value / block.max) * 100);
         const tip = `${item.label}: ${item.display}`;
         return `<div class="bar-row" title="${escapeHtml(tip)}">
-          <span class="name">${saveButton(item.school_id, item.label)}${escapeHtml(item.label)}</span>
+          <span class="name">${saveButton(item.school_id, item.label)}${schoolName(item.school_id, item.label)}</span>
           <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
           <span class="num">${escapeHtml(item.display)}</span>
         </div>`;
@@ -815,7 +578,7 @@
     function renderCompare(block) {
       const ids = block.school_ids || [];
       const head = `<tr><th></th>${block.schools.map((s, i) =>
-        `<th>${saveButton(ids[i], s)}${escapeHtml(s)}</th>`).join("")}</tr>`;
+        `<th>${saveButton(ids[i], s)}${schoolName(ids[i], s)}</th>`).join("")}</tr>`;
       const body = block.rows.map(row => `<tr>
         <td>${escapeHtml(row.label)}</td>
         ${row.cells.map(cell => {
@@ -839,7 +602,8 @@
           const missing = cell === "Not reported";
           const tag = row.reference && i === 0 ? `<span class="tag ref">Your school</span>` : "";
           const heart = i === 0 ? saveButton(row.school_id, cell) : "";
-          return `<td class="${col.numeric ? "num" : ""} ${missing ? "missing" : ""}">${heart}${escapeHtml(cell)}${tag}</td>`;
+          const text = i === 0 ? schoolName(row.school_id, cell) : escapeHtml(cell);
+          return `<td class="${col.numeric ? "num" : ""} ${missing ? "missing" : ""}">${heart}${text}${tag}</td>`;
         }).join("")}
       </tr>`).join("");
       return `<section><div class="table-wrap"><table><thead>${head}</thead><tbody>${body}</tbody></table></div></section>`;
@@ -865,6 +629,30 @@
         ${source}
         ${feedbackButtons(data.log_id)}
       </div>`;
+    }
+
+    // "Can't answer": what we do know about the school, and questions we can answer.
+    function renderFallback(fallback) {
+      const s = fallback.school;
+      let school = "";
+      if (s) {
+        const st = s.stats;
+        const pct = v => (v == null ? "Not reported" : `${(Number(v) * 100).toFixed(1)}%`);
+        const money = v => (v == null ? "Not reported" : `$${Math.round(Number(v)).toLocaleString()}`);
+        const tiles = [["Graduation rate", pct(st.graduation_rate)], ["Acceptance rate", pct(st.acceptance_rate)],
+          ["Average net price", money(st.net_price)], ["Median earnings", money(st.median_earnings)]]
+          .map(([label, value]) => `<div class="stat"><div class="label">${label}</div>
+            <div class="value ${value === "Not reported" ? "missing" : ""}">${value}</div></div>`).join("");
+        school = `<div class="block-title stats-title">${saveButton(s.id, s.name)}${schoolName(s.id, s.name)}</div>
+          <p class="sign-in-hint">${escapeHtml([s.city, s.state].filter(Boolean).join(", "))} · ${escapeHtml(s.type || "")}</p>
+          <div class="stats">${tiles}</div>
+          <div class="fallback-links"><a href="${s.url}">Full profile →</a>
+            ${s.website ? `<a href="${escapeHtml(s.website)}" target="_blank" rel="noopener">Official website ↗</a>` : ""}</div>`;
+      }
+      const suggestions = fallback.suggestions.map(q =>
+        `<button type="button" class="suggestion">${escapeHtml(q)}</button>`).join("");
+      return `<div class="card fallback">${school}
+        <div><div class="block-title">Questions I can answer</div><div class="suggestions">${suggestions}</div></div></div>`;
     }
 
     function feedbackButtons(logId) {
@@ -981,7 +769,9 @@
         if (data.kind === "result") {
           addMessage("answer", renderAnswer(data));
         } else {
-          addMessage("ai", `<div class="bubble">${escapeHtml(data.response)}</div>${feedbackButtons(data.log_id)}`);
+          const extra = data.fallback ? renderFallback(data.fallback) : "";
+          addMessage(extra ? "answer" : "ai",
+            `<div class="bubble">${escapeHtml(data.response)}</div>${extra}${feedbackButtons(data.log_id)}`);
         }
       } catch {
         showError("Could not reach the server. Make sure the backend is running.");
@@ -993,184 +783,7 @@
       }
     }
 
-    // ---------- Accounts (Supabase Auth) ----------
-
-    function showToast(message) {
-      const toast = document.createElement("div");
-      toast.className = "toast";
-      toast.setAttribute("role", "status");
-      toast.textContent = message;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 2600);
-    }
-
-    async function api(path, options = {}) {
-      const res = await fetch(path, {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token || ""}`,
-          ...(options.headers || {}),
-        },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.status === 401) {
-        openAuth("signin", "Your session expired. Please sign in again.");
-        throw new Error("signed out");
-      }
-      if (!res.ok) throw new Error(data.detail || "Something went wrong");
-      return data;
-    }
-
-    function setAuthMode(mode) {
-      authMode = mode;
-      const signup = mode === "signup";
-      document.getElementById("tab-signin").setAttribute("aria-selected", String(!signup));
-      document.getElementById("tab-signup").setAttribute("aria-selected", String(signup));
-      document.getElementById("auth-submit").textContent = signup ? "Create account" : "Sign in";
-      document.getElementById("auth-password").autocomplete = signup ? "new-password" : "current-password";
-      setAuthMessage("");
-    }
-
-    function setAuthMessage(text, kind = "error") {
-      authMessage.hidden = !text;
-      authMessage.textContent = text;
-      authMessage.className = `auth-message ${kind}`;
-    }
-
-    function openAuth(mode = "signin", reason = "Sign in to save schools and keep notes on them.") {
-      if (!authReady) return;
-      setAuthMode(mode);
-      document.getElementById("auth-reason").textContent = reason;
-      if (!authDialog.open) authDialog.showModal();
-      document.getElementById("auth-email").focus();
-    }
-
-    function updateAuthUI() {
-      const signedIn = Boolean(session);
-      document.body.classList.toggle("signed-in", signedIn);
-      document.getElementById("signed-out").hidden = !authReady || signedIn;
-      document.getElementById("signed-in").hidden = !signedIn;
-      document.getElementById("user-email").textContent = session?.user?.email || "";
-    }
-
-    function refreshHearts() {
-      document.querySelectorAll(".save-btn").forEach(btn => {
-        const saved = favorites.has(Number(btn.dataset.schoolId));
-        btn.setAttribute("aria-pressed", String(saved));
-        btn.textContent = saved ? "♥" : "♡";
-      });
-      document.getElementById("saved-count").textContent = favorites.size;
-    }
-
-    async function loadFavoriteIds() {
-      try {
-        const data = await api("/me/favorite-ids");
-        favorites.clear();
-        data.ids.forEach(id => favorites.add(id));
-      } catch { /* api() already asked the user to sign in again */ }
-      refreshHearts();
-    }
-
-    async function toggleSave(schoolId) {
-      if (!session) {
-        openAuth("signin", "Sign in to save schools.");
-        return;
-      }
-      const wasSaved = favorites.has(schoolId);
-      wasSaved ? favorites.delete(schoolId) : favorites.add(schoolId);
-      refreshHearts();
-      try {
-        await api(`/me/favorites/${schoolId}`, { method: wasSaved ? "DELETE" : "PUT" });
-        showToast(wasSaved ? "Removed from saved schools" : "Saved to your schools");
-      } catch (err) {
-        wasSaved ? favorites.add(schoolId) : favorites.delete(schoolId);
-        refreshHearts();
-        if (err.message !== "signed out") showToast(err.message);
-      }
-    }
-
-    async function submitAuth(event) {
-      event.preventDefault();
-      const email = document.getElementById("auth-email").value.trim();
-      const password = document.getElementById("auth-password").value;
-      if (!email || password.length < 6) {
-        setAuthMessage("Enter your email and a password of at least 6 characters.");
-        return;
-      }
-      const submit = document.getElementById("auth-submit");
-      submit.disabled = true;
-      try {
-        if (authMode === "signup") {
-          const { data, error } = await sb.auth.signUp({
-            email, password, options: { emailRedirectTo: location.origin + location.pathname },
-          });
-          if (error) throw error;
-          if (!data.session) {
-            setAuthMessage(`Check ${email} for a link to confirm your account, then sign in.`, "info");
-          }
-        } else {
-          const { error } = await sb.auth.signInWithPassword({ email, password });
-          if (error) throw error;
-        }
-      } catch (err) {
-        setAuthMessage(err.message || "Could not sign in.");
-      } finally {
-        submit.disabled = false;
-      }
-    }
-
-    async function signInWithGoogle() {
-      if (!googleEnabled) {
-        setAuthMessage("Google sign-in isn't turned on yet. Please use email for now.");
-        return;
-      }
-      const { error } = await sb.auth.signInWithOAuth({
-        provider: "google", options: { redirectTo: location.origin + location.pathname },
-      });
-      if (error) setAuthMessage(error.message);
-    }
-
-    async function initAuth() {
-      try {
-        const config = (await (await fetch("/config")).json()).supabase || {};
-        if (!config.url || !config.anon_key || !window.supabase) return;
-        sb = window.supabase.createClient(config.url, config.anon_key, {
-          auth: { flowType: "pkce", persistSession: true, detectSessionInUrl: true },
-        });
-        authReady = true;
-        fetch(`${config.url}/auth/v1/settings`, { headers: { apikey: config.anon_key } })
-          .then(r => r.json()).then(s => { googleEnabled = Boolean(s.external?.google); }).catch(() => {});
-        sb.auth.onAuthStateChange((event, newSession) => {
-          session = newSession;
-          updateAuthUI();
-          // Supabase advises not to await other calls inside this callback.
-          setTimeout(() => {
-            if (session) {
-              loadFavoriteIds();
-              if (event === "SIGNED_IN" && authDialog.open) authDialog.close();
-            } else {
-              favorites.clear();
-              refreshHearts();
-              if (location.hash === "#saved") location.hash = "";
-            }
-            route();
-          }, 0);
-        });
-      } catch {
-        authReady = false;
-      }
-      updateAuthUI();
-    }
-
     // ---------- My Saved Schools ----------
-
-    const fmt = {
-      pct: v => (v == null ? "—" : `${(Number(v) * 100).toFixed(1)}%`),
-      money: v => (v == null ? "—" : `$${Math.round(Number(v)).toLocaleString()}`),
-      int: v => (v == null ? "—" : Math.round(Number(v)).toLocaleString()),
-      date: v => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
-    };
 
     function renderNote(note) {
       return `<div class="note" data-note-id="${note.id}">
@@ -1195,7 +808,7 @@
       return `<article class="saved-card" data-school-id="${school.school_id}">
         <div class="saved-card-head">
           <div>
-            <h3>${escapeHtml(school.name || `School ${school.school_id}`)}</h3>
+            <h3><a class="school-link" href="/school/${school.school_id}">${escapeHtml(school.name || `School ${school.school_id}`)}</a></h3>
             <div class="place">${escapeHtml(place)}</div>
           </div>
           <button type="button" class="remove-btn" data-action="remove">♥ Remove</button>
@@ -1223,7 +836,8 @@
       document.body.classList.add("saved-page");
       newChatBtn.hidden = true;
       savedView.innerHTML = `<div class="saved-head"><h2 id="saved-title">My Saved Schools</h2>
-        <button type="button" class="back-btn" data-action="back">← Back to search</button></div>
+        <div class="saved-actions"><a class="back-btn" href="/compare">⚖ Compare schools</a>
+        <button type="button" class="back-btn" data-action="back">← Back to search</button></div></div>
         <div class="loading-bubble"><span class="dots"><span></span><span></span><span></span></span> Loading your schools...</div>`;
       chat.scrollTo({ top: 0 });
       try {
@@ -1317,24 +931,15 @@
       if (heart) toggleSave(Number(heart.dataset.schoolId));
       const vote = event.target.closest(".feedback button[data-rating]");
       if (vote) sendFeedback(vote);
-    });
-    document.addEventListener("click", event => {
-      const trigger = event.target.closest("[data-auth]");
-      if (trigger) openAuth(trigger.dataset.auth === "signup" ? "signup" : "signin",
-        trigger.closest(".sign-in-hint") ? "Sign in to save schools." : undefined);
-    });
-    document.getElementById("tab-signin").addEventListener("click", () => setAuthMode("signin"));
-    document.getElementById("tab-signup").addEventListener("click", () => setAuthMode("signup"));
-    document.getElementById("auth-close").addEventListener("click", () => authDialog.close());
-    authDialog.addEventListener("click", event => { if (event.target === authDialog) authDialog.close(); });
-    authForm.addEventListener("submit", submitAuth);
-    document.getElementById("google-btn").addEventListener("click", signInWithGoogle);
-    document.getElementById("sign-out").addEventListener("click", () => sb?.auth.signOut());
-    document.getElementById("saved-btn").addEventListener("click", () => {
-      if (location.hash === "#saved") showSaved();
-      else location.hash = "saved";
+      const suggestion = event.target.closest(".suggestion");
+      if (suggestion) sendQuestion(suggestion.textContent);
     });
     window.addEventListener("hashchange", route);
+    window.onSavedClick = showSaved;
+    window.onAuthChanged = () => {
+      if (!session && location.hash === "#saved") location.hash = "";
+      route();
+    };
 
     sendBtn.addEventListener("click", () => sendQuestion());
 

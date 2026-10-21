@@ -107,7 +107,7 @@
    "target": 170976, "n": 10},
 
   {"id": "unanswerable-usnews", "category": "unanswerable", "question": "What is Harvard's US News ranking?", "check": "cannot_answer"},
-  {"id": "unanswerable-deadlines", "category": "unanswerable", "question": "When is the early decision deadline for Yale?", "check": "cannot_answer"},
+  {"id": "unanswerable-professors", "category": "unanswerable", "question": "Who are the best professors at Harvard?", "check": "cannot_answer"},
   {"id": "unanswerable-dorms", "category": "unanswerable", "question": "Which colleges have the best dorms?", "check": "cannot_answer"},
   {"id": "unanswerable-future", "category": "unanswerable", "question": "What will UCLA's acceptance rate be in 2030?", "check": "cannot_answer"},
   {"id": "unanswerable-essays", "category": "unanswerable", "question": "What are Stanford's supplemental essay prompts?", "check": "cannot_answer"},

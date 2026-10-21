@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>School profile · CollegeCopilot</title>
+  <link rel="stylesheet" href="/static/common.css">
+  <link rel="stylesheet" href="/static/pages.css">
+  <style>
+    .hero {
+      position: relative;
+      border-radius: 18px;
+      overflow: hidden;
+      min-height: 230px;
+      background: linear-gradient(135deg, var(--brand-dark), var(--brand));
+      color: #fff;
+      display: flex;
+      align-items: flex-end;
+    }
+    .hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(17, 24, 39, 0) 30%, rgba(17, 24, 39, 0.78));
+    }
+    .hero .placeholder {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      opacity: 0.25;
+    }
+    .hero-text { position: relative; z-index: 1; padding: 20px 22px; width: 100%; }
+    .hero h2 { font-size: 1.75rem; letter-spacing: -0.03em; line-height: 1.2; }
+    .hero .meta { font-size: 0.9rem; opacity: 0.9; margin-top: 4px; }
+    .credit { font-size: 0.72rem; color: var(--muted); margin-top: 6px; }
+    .credit a { color: inherit; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag-chip { font-size: 0.75rem; background: var(--brand-soft); color: var(--brand-dark); padding: 4px 10px; border-radius: 999px; }
+
+    .score-card { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center; }
+    .score-ring {
+      width: 116px;
+      height: 116px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: conic-gradient(var(--brand) calc(var(--pct) * 1%), var(--track) 0);
+    }
+    .score-ring div {
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      background: var(--surface);
+      display: grid;
+      place-items: center;
+      text-align: center;
+    }
+    .score-ring b { font-size: 1.7rem; letter-spacing: -0.03em; display: block; line-height: 1; }
+    .score-ring span { font-size: 0.7rem; color: var(--muted); line-height: 1.3; margin-top: 4px; }
+    .components { display: flex; flex-direction: column; gap: 8px; }
+    .component { display: grid; grid-template-columns: minmax(120px, 40%) 1fr 44px; gap: 10px; align-items: center; font-size: 0.85rem; }
+    .component .weight { color: var(--muted); font-size: 0.75rem; }
+    .component .track { height: 10px; background: var(--track); border-radius: 999px; overflow: hidden; }
+    .component .fill { height: 100%; background: var(--series-1); border-radius: 999px; }
+    .component .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .majors details { border-top: 1px solid var(--border); padding: 10px 0; }
+    .majors details:first-of-type { border-top: none; padding-top: 0; }
+    .majors summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+    .majors ul { columns: 2; column-gap: 24px; margin: 10px 0 0 18px; font-size: 0.85rem; line-height: 1.6; color: #374151; }
+
+    .stars { color: #f59e0b; letter-spacing: 1px; }
+    .stars .off { color: #d6d9e2; }
+    .rating-summary { display: flex; align-items: baseline; gap: 10px; }
+    .rating-summary b { font-size: 1.6rem; }
+    .review { border-top: 1px solid var(--border); padding: 12px 0; }
+    .review:first-child { border-top: none; }
+    .review p { font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; margin-top: 4px; }
+    .review .when { font-size: 0.75rem; color: var(--muted); margin-left: 6px; }
+    .review-form { display: flex; flex-direction: column; gap: 10px; background: var(--surface-2); border-radius: 12px; padding: 14px; }
+    .star-input { display: flex; flex-direction: row-reverse; justify-content: flex-end; gap: 4px; }
+    .star-input input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .star-input label { font-size: 1.8rem; color: #d6d9e2; cursor: pointer; line-height: 1; }
+    .star-input input:checked ~ label, .star-input label:hover, .star-input label:hover ~ label { color: #f59e0b; }
+    .star-input input:focus-visible + label { outline: 2px solid var(--brand); border-radius: 4px; }
+    .review-form textarea { width: 100%; min-height: 90px; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+    .review-form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+    @media (max-width: 640px) {
+      .hero { min-height: 190px; }
+      .hero h2 { font-size: 1.35rem; }
+      .score-card { grid-template-columns: 1fr; justify-items: center; }
+      .components { width: 100%; }
+      .component { grid-template-columns: minmax(0, 46%) 1fr 40px; font-size: 0.8rem; }
+      .majors ul { columns: 1; }
+    }
+  </style>
+</head>
+<body class="page">
+  <header>
+    <div class="header-inner">
+      <a href="/" class="brand" aria-label="CollegeCopilot home">
+        <svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+          <rect width="40" height="40" rx="11" fill="#ffffff" fill-opacity="0.14"/>
+          <rect x="0.5" y="0.5" width="39" height="39" rx="10.5" fill="none" stroke="#ffffff" stroke-opacity="0.3"/>
+          <path d="M20 9 L34 16 L20 23 L6 16 Z" fill="#ffffff"/>
+          <path d="M12 19.5 V26 C12 28.8 16 31 20 31 C24 31 28 28.8 28 26 V19.5 L20 23.5 Z" fill="#ffffff" fill-opacity="0.85"/>
+          <path d="M31 17.5 V25" stroke="#fcd34d" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="31" cy="26.5" r="2" fill="#fcd34d"/>
+        </svg>
+        <h1>College<span class="accent">Copilot</span></h1>
+      </a>
+      <div class="account">
+        <a class="header-btn" href="/compare">⚖<span class="btn-label"> Compare</span></a>
+        <div id="signed-out" class="account" hidden>
+          <button type="button" class="header-btn" data-auth="signin">Sign in</button>
+          <button type="button" class="header-btn primary signup" data-auth="signup">Sign up</button>
+        </div>
+        <div id="signed-in" class="account" hidden>
+          <button type="button" class="header-btn" id="saved-btn" aria-label="My saved schools">♥<span class="btn-label"> Saved</span><span class="saved-count" id="saved-count">0</span></button>
+          <span class="user-email" id="user-email"></span>
+          <button type="button" class="header-btn" id="sign-out">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-main" id="profile" aria-live="polite">
+    <div class="panel"><div class="loading-line">Loading school...</div></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+  <script src="/static/auth.js"></script>
+  <script>
+    const schoolId = Number(location.pathname.split("/").filter(Boolean).pop());
+    const root = document.getElementById("profile");
+    let profile = null;
+    let myReview = null;
+
+    const DEADLINE_LABELS = {
+      early_decision: "Early Decision", early_decision_2: "Early Decision II", early_action: "Early Action",
+      restrictive_early_action: "Restrictive Early Action", regular: "Regular Decision", rolling: "Rolling admission",
+      priority: "Priority deadline",
+    };
+
+    const show = {
+      pct: v => (v == null ? "Not reported" : `${(Number(v) * 100).toFixed(1)}%`),
+      money: v => (v == null ? "Not reported" : `$${Math.round(Number(v)).toLocaleString()}`),
+      int: v => (v == null ? "Not reported" : Math.round(Number(v)).toLocaleString()),
+      ratio: v => (v == null ? "Not reported" : `${Number(v)}:1`),
+      day: v => new Date(`${v}T12:00:00`).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }),
+    };
+
+    function stars(rating) {
+      const full = Math.round(Number(rating) || 0);
+      return `<span class="stars" aria-label="${full} out of 5 stars">${"★".repeat(full)}<span class="off">${"★".repeat(5 - full)}</span></span>`;
+    }
+
+    function statTile(label, value) {
+      const missing = value === "Not reported";
+      return `<div class="stat"><div class="label">${label}</div><div class="value ${missing ? "missing" : ""}">${escapeHtml(value)}</div></div>`;
+    }
+
+    function renderHero(p) {
+      const photo = p.photo
+        ? `<img src="${escapeHtml(p.photo.image_url)}" alt="Campus of ${escapeHtml(p.name)}">`
+        : `<div class="placeholder" aria-hidden="true"><svg width="120" height="120" viewBox="0 0 40 40"><path d="M20 9 L34 16 L20 23 L6 16 Z" fill="#fff"/><path d="M12 19.5 V26 C12 28.8 16 31 20 31 C24 31 28 28.8 28 26 V19.5 L20 23.5 Z" fill="#fff"/></svg></div>`;
+      const meta = [[p.city, p.state].filter(Boolean).join(", "), p.type, p.locale].filter(Boolean).join(" · ");
+      const credit = p.photo
+        ? `<p class="credit">Photo: ${escapeHtml([p.photo.artist, p.photo.license].filter(Boolean).join(", "))}
+            · <a href="${escapeHtml(p.photo.file_page_url || "https://commons.wikimedia.org")}" target="_blank" rel="noopener">Wikimedia Commons</a></p>`
+        : "";
+      const saved = favorites.has(p.id);
+      const tags = [p.hbcu ? "HBCU" : null, p.religious_affiliation, ...p.designations].filter(Boolean)
+        .map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join("");
+      return `<section>
+        <div class="hero">${photo}<div class="hero-text"><h2>${escapeHtml(p.name)}</h2><div class="meta">${escapeHtml(meta)}</div></div></div>
+        ${credit}
+      </section>
+      <div class="actions">
+        <button type="button" class="save-pill" data-school-id="${p.id}" aria-pressed="${saved}">${saved ? "♥ Saved" : "♡ Save"}</button>
+        ${p.website ? `<a class="pill" href="${escapeHtml(p.website)}" target="_blank" rel="noopener">Official website ↗</a>` : ""}
+        <a class="pill" href="/compare?ids=${p.id}">⚖ Compare</a>
+        <a class="pill" href="/?q=${encodeURIComponent(`Find 5 schools similar to ${p.name}`)}">Similar schools</a>
+      </div>
+      ${tags ? `<div class="tags">${tags}</div>` : ""}`;
+    }
+
+    function renderScore(p) {
+      if (!p.score) {
+        return `<section class="panel"><h3>CollegeCopilot Score</h3>
+          <p class="muted">Not scored: the score needs a graduation rate, median earnings, acceptance rate and
+          student-faculty ratio, and this school is missing at least one.</p></section>`;
+      }
+      const s = p.score;
+      const parts = s.components.map(c => `<div class="component">
+          <span>${c.label} <span class="weight">${c.weight}%</span></span>
+          <div class="track"><div class="fill" style="width:${Number(c.score)}%"></div></div>
+          <span class="num">${Number(c.score).toFixed(0)}</span>
+        </div>`).join("");
+      return `<section class="panel">
+        <h3>CollegeCopilot Score</h3>
+        <div class="score-card">
+          <div class="score-ring" style="--pct:${Number(s.score)}"><div><b>${Number(s.score).toFixed(1)}</b><span>#${s.rank.toLocaleString()}<br>of ${s.out_of.toLocaleString()}</span></div></div>
+          <div class="components">${parts}</div>
+        </div>
+        <p class="muted small">Each part is a percentile among ${s.out_of.toLocaleString()} colleges (100 = best), weighted as shown.</p>
+      </section>`;
+    }
+
+    function renderStats(p) {
+      const s = p.stats;
+      return `<section class="panel"><h3>Key stats</h3><div class="stats">
+        ${statTile("Graduation rate", show.pct(s.graduation_rate))}
+        ${statTile("Acceptance rate", show.pct(s.acceptance_rate))}
+        ${statTile("Median earnings (10 yrs)", show.money(s.median_earnings))}
+        ${statTile("Average net price", show.money(s.net_price))}
+        ${statTile("In-state tuition", show.money(s.tuition_in_state))}
+        ${statTile("Out-of-state tuition", show.money(s.tuition_out_of_state))}
+        ${statTile("Room and board", show.money(s.room_board))}
+        ${statTile("Students", show.int(s.students))}
+        ${statTile("Student-faculty ratio", show.ratio(s.student_faculty_ratio))}
+        ${statTile("Retention rate", show.pct(s.retention_rate))}
+      </div></section>`;
+    }
+
+    function renderDeadlines(p) {
+      if (!p.deadlines.length) return "";
+      const rows = p.deadlines.map(d => `<tr>
+          <td>${escapeHtml(DEADLINE_LABELS[d.deadline_type] || d.deadline_type)}</td>
+          <td>${d.deadline_date ? escapeHtml(show.day(d.deadline_date)) : "Rolling"}</td>
+          <td>${escapeHtml(d.notes || "")} ${d.source_url ? `<a href="${escapeHtml(d.source_url)}" target="_blank" rel="noopener">Source ↗</a>` : ""}</td>
+        </tr>`).join("");
+      const cycle = p.deadlines[0].cycle ? ` (${escapeHtml(p.deadlines[0].cycle)})` : "";
+      return `<section class="panel"><h3>Application deadlines${cycle}</h3>
+        <div class="table-wrap"><table><thead><tr><th>Type</th><th>Deadline</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="muted small">Always confirm on the school's admissions site before applying.</p></section>`;
+    }
+
+    function renderMajors(p) {
+      if (!p.majors.length) return `<section class="panel"><h3>Majors</h3><p class="muted">No program data reported.</p></section>`;
+      const groups = p.majors.map((m, i) => `<details ${m.level === "Bachelor's" || (i === 0 && !p.majors.some(x => x.level === "Bachelor's")) ? "open" : ""}>
+          <summary>${escapeHtml(m.level)} (${m.programs.length})</summary>
+          <ul>${m.programs.map(name => `<li>${escapeHtml(name.replace(/\.$/, ""))}</li>`).join("")}</ul>
+        </details>`).join("");
+      return `<section class="panel majors"><h3>Majors and programs</h3>${groups}</section>`;
+    }
+
+    function renderSafety(p) {
+      const s = p.safety;
+      if (!s) return `<section class="panel"><h3>Campus safety</h3><p class="muted">No Clery Act crime data reported.</p></section>`;
+      const trend = [s.criminal_offenses_total_2022, s.criminal_offenses_total_2023, s.criminal_offenses_total]
+        .map(v => (v == null ? "—" : v.toLocaleString())).join(" → ");
+      return `<section class="panel"><h3>Campus safety (2024, on campus)</h3><div class="stats">
+          ${statTile("Reported crimes", show.int(s.criminal_offenses_total))}
+          ${statTile("Per 1,000 students", s.criminal_offenses_per_1000_students == null ? "Not reported" : Number(s.criminal_offenses_per_1000_students).toFixed(1))}
+          ${statTile("Sex offenses", show.int(s.sex_offenses_total))}
+          ${statTile("Burglaries", show.int(s.burglary_count))}
+          ${statTile("Vehicle thefts", show.int(s.motor_vehicle_theft_count))}
+          ${statTile("Stalking", show.int(s.stalking_count))}
+        </div>
+        <p class="muted small">Trend 2022 → 2023 → 2024: ${escapeHtml(trend)}. Source: Clery Act reports (U.S. Department of Education).</p>
+      </section>`;
+    }
+
+    function reviewForm() {
+      const r = myReview || {};
+      const starsInput = [5, 4, 3, 2, 1].map(n => `<input type="radio" name="rating" id="star${n}" value="${n}" ${r.rating === n ? "checked" : ""}>
+          <label for="star${n}" title="${n} star${n > 1 ? "s" : ""}">★</label>`).join("");
+      return `<form class="review-form" id="review-form">
+        <div class="row"><div class="star-input" role="radiogroup" aria-label="Your rating">${starsInput}</div></div>
+        <textarea id="review-text" maxlength="2000" placeholder="What should other families know? (optional)" aria-label="Your review">${escapeHtml(r.review_text || "")}</textarea>
+        <div class="row">
+          <button type="submit">${myReview ? "Update review" : "Post review"}</button>
+          ${myReview ? `<button type="button" class="link-btn danger" id="delete-review">Delete my review</button>` : ""}
+          <button type="button" class="link-btn" id="cancel-review">Cancel</button>
+        </div>
+      </form>`;
+    }
+
+    function renderReviews(p) {
+      const r = p.reviews;
+      const summary = r.count
+        ? `<div class="rating-summary"><b>${Number(r.average).toFixed(1)}</b>${stars(r.average)}<span class="muted">${r.count} review${r.count === 1 ? "" : "s"}</span></div>`
+        : `<p class="muted">No reviews yet. Be the first to share what it's like.</p>`;
+      const list = r.recent.map(x => `<div class="review">${stars(x.rating)}<span class="when">${escapeHtml(fmt.date(x.created_at))}</span>
+          ${x.review_text ? `<p>${escapeHtml(x.review_text)}</p>` : ""}</div>`).join("");
+      return `<section class="panel" id="reviews"><div class="panel-head"><h3>Reviews</h3>
+          <button type="button" class="pill" id="write-review">${myReview ? "Edit your review" : "Write a review"}</button></div>
+        ${summary}<div id="review-form-slot"></div><div>${list}</div>
+      </section>`;
+    }
+
+    function render() {
+      document.title = `${profile.name} · CollegeCopilot`;
+      root.innerHTML = renderHero(profile) + renderScore(profile) + renderStats(profile) + renderDeadlines(profile)
+        + renderMajors(profile) + renderSafety(profile) + renderReviews(profile)
+        + `<p class="muted small">Sources: College Scorecard, IPEDS, Clery Act data, user reviews.
+           <a href="/?q=${encodeURIComponent(`Tell me about ${profile.name}`)}">Ask a question about this school →</a></p>`;
+    }
+
+    async function loadProfile() {
+      try {
+        const res = await fetch(`/api/school/${schoolId}`);
+        if (!res.ok) throw new Error(res.status === 404 ? "We couldn't find that school." : "Couldn't load this school.");
+        profile = await res.json();
+        render();
+      } catch (err) {
+        root.innerHTML = `<div class="panel"><h3>${escapeHtml(err.message)}</h3><p><a href="/">← Back to search</a></p></div>`;
+      }
+    }
+
+    async function loadMyReview() {
+      myReview = null;
+      if (session) {
+        try { myReview = (await api(`/me/reviews/${schoolId}`)).review; } catch { /* handled by api() */ }
+      }
+      if (profile) render();
+    }
+
+    root.addEventListener("click", async event => {
+      const save = event.target.closest(".save-pill");
+      if (save) {
+        await toggleSave(schoolId);
+        return;
+      }
+      if (event.target.closest("#write-review")) {
+        if (!session) { openAuth("signin", "Sign in to write a review."); return; }
+        document.getElementById("review-form-slot").innerHTML = reviewForm();
+        document.querySelector("#review-form input:checked, #review-form input")?.focus();
+      }
+      if (event.target.closest("#cancel-review")) document.getElementById("review-form-slot").innerHTML = "";
+      if (event.target.closest("#delete-review")) {
+        try {
+          await api(`/me/reviews/${schoolId}`, { method: "DELETE" });
+          showToast("Review deleted");
+          myReview = null;
+          await loadProfile();
+        } catch (err) { if (err.message !== "signed out") showToast(err.message); }
+      }
+    });
+
+    root.addEventListener("submit", async event => {
+      if (event.target.id !== "review-form") return;
+      event.preventDefault();
+      const rating = Number(event.target.querySelector("input[name=rating]:checked")?.value);
+      if (!rating) { showToast("Pick a star rating"); return; }
+      try {
+        const saved = await api(`/me/reviews/${schoolId}`, {
+          method: "PUT", body: JSON.stringify({ rating, review_text: document.getElementById("review-text").value }),
+        });
+        myReview = saved.review;
+        showToast("Thanks for your review!");
+        await loadProfile();
+      } catch (err) { if (err.message !== "signed out") showToast(err.message); }
+    });
+
+    // Keep the Save button in sync with hearts elsewhere.
+    const originalRefresh = refreshHearts;
+    refreshHearts = () => {
+      originalRefresh();
+      document.querySelectorAll(".save-pill").forEach(btn => {
+        const saved = favorites.has(Number(btn.dataset.schoolId));
+        btn.setAttribute("aria-pressed", String(saved));
+        btn.textContent = saved ? "♥ Saved" : "♡ Save";
+      });
+    };
+    window.onAuthChanged = () => loadMyReview();
+
+    if (!Number.isInteger(schoolId)) {
+      root.innerHTML = `<div class="panel"><h3>We couldn't find that school.</h3><p><a href="/">← Back to search</a></p></div>`;
+    } else {
+      loadProfile();
+      initAuth();
+    }
+  </script>
+</body>
+</html>

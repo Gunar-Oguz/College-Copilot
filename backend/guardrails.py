@@ -10,6 +10,7 @@ import re
 
 from database import execute_sql
 from presentation import column_meta
+from school_lookup import resolve_school
 
 UNIVERSITY_RE = re.compile(
     r"\buniversities\b|\bfour[- ]year\b|\b4[- ]year\b"
@@ -47,6 +48,8 @@ COLLEGES_HINT = (
 )
 NON_DEGREE_NOTE = "Left out {n} certificate-only or adult-education program{s}, since you asked about colleges."
 RANKING_NOTE = "There's no official ranking in this data, so results are ordered by {basis}."
+SCORE_NOTE = ("Ranked by the CollegeCopilot Score: 40% graduation rate, 30% median earnings, "
+              "20% selectivity and 10% student-faculty ratio, each compared with other colleges.")
 FEWER_NOTE = "Only {count} result{s} in the data {verb}, so this shows fewer than the {requested} you asked for."
 
 
@@ -119,6 +122,31 @@ def check_answer(question: str, rows: list[dict], sql: str) -> tuple[list[dict],
 
     if len(rows) > 1 and RANKING_RE.search(question):
         basis = ranking_basis(sql)
-        if basis:
+        if basis and basis.startswith("collegecopilot score"):
+            notes.append(SCORE_NOTE)
+        elif basis:
             notes.append(RANKING_NOTE.format(basis=basis))
     return rows, notes
+
+
+QUESTION_WORDS = {"what", "which", "who", "where", "when", "why", "how", "is", "are", "does", "do", "can",
+                  "tell", "show", "find", "list", "compare", "i", "my", "the", "a", "an", "best", "top"}
+PHRASE_RE = re.compile(r"\b[A-Z][\w&'.-]*(?:\s+(?:of|at|in|the|and|&|[A-Z][\w&'.-]*))*")
+
+
+def schools_named_in(question: str) -> list[int]:
+    """Schools named exactly (full name or known nickname) in a question, e.g. 'UCLA', 'Ohio State'."""
+    found = []
+    for phrase in PHRASE_RE.findall(question):
+        words = phrase.split()
+        while words and words[0].lower() in QUESTION_WORDS:
+            words = words[1:]
+        while words and words[-1].lower() in {"of", "at", "in", "the", "and", "&"}:
+            words = words[:-1]
+        if not words:
+            continue
+        candidates = resolve_school(" ".join(words).strip(" .'"), limit=2)
+        exact = [c for c in candidates if c["score"] == 1.0]
+        if len(exact) == 1 and exact[0]["id"] not in found:
+            found.append(exact[0]["id"])
+    return found
