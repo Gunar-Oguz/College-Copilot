@@ -27,7 +27,7 @@ from database import (  # noqa: E402
     validate_select,
 )
 from school_lookup import normalize, resolve_school  # noqa: E402
-from planner import _Session, build_prompt, net_price_column, question_hints  # noqa: E402
+from planner import _Session, build_prompt, net_price_column  # noqa: E402
 from similar_schools import find_similar_schools  # noqa: E402
 from locations import normalize_city, resolve_location  # noqa: E402
 
@@ -113,16 +113,6 @@ class TestPlannerHelpers:
 
     def test_submit_unknown_result_id_is_rejected(self):
         assert isinstance(_Session().submit({"kind": "result", "result_id": "r9"}), str)
-
-    @pytest.mark.parametrize("question,matches", [
-        ("Top 10 universities in California by graduation rate", True),
-        ("Cheapest four-year colleges in Ohio", True),
-        ("Which 5 universities spend the most on research?", False),
-        ("Top 5 public colleges in California by graduation rate", False),
-        ("Which schools have the most students?", False),
-    ])
-    def test_university_hint_trigger(self, question, matches):
-        assert bool(question_hints(question)) == matches
 
     def test_normalize(self):
         assert normalize("  Texas A&M University-College Station ") == "texas a and m university college station"

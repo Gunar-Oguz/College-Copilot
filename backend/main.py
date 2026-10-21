@@ -2,21 +2,25 @@ import json
 import logging
 import os
 import re
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import anthropic
 import psycopg2
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
+import admin_page
+import app_logs
+import user_data
 from database import execute_sql, get_data_sources, get_latest_year
+from guardrails import check_answer, ranking_basis
 from planner import plan_answer
 from presentation import build_blocks, unsupported_numbers
-import user_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,8 +36,9 @@ load_dotenv(ROOT_DIR / ".env")
 async def lifespan(_app: FastAPI):
     try:
         user_data.ensure_user_tables()
+        app_logs.ensure_log_tables()
     except psycopg2.Error as e:
-        logger.error("Could not create user tables: %s", e)
+        logger.error("Could not create user or log tables: %s", e)
     yield
 
 
@@ -56,8 +61,10 @@ class AskResponse(BaseModel):
     kind: str  # "result", "clarify", "cannot_answer" or "no_results"
     response: str  # short text answer (summary, clarifying question, or "I don't know")
     blocks: list[dict] = []
+    notes: list[str] = []  # guardrail notes, e.g. what a "ranking" is ordered by
     source: str | None = None
     schools_considered: int = 0
+    log_id: int | None = None  # for thumbs up/down
 
 
 SUMMARY_SYSTEM_PROMPT = """You are CollegeCopilot. Write a one- or two-sentence summary that
@@ -70,6 +77,8 @@ RULES:
 - Rows with role "reference" are the school the user asked about.
 - The rows were already selected to match the question: when it asks which schools meet a condition,
   every row meets it, even if the condition's column is not shown.
+- The rows are already in the answer's order: the first row is the top, best or cheapest result.
+  Never call a different school the top one, and never use reputation or outside rankings.
 - When comparing two numbers, say "up" or "higher" only if the later or named value is larger.
 - If values the question needs are null, say they are not reported.
 - No advice, opinions, markdown, or lists."""
@@ -78,7 +87,7 @@ NO_ANSWER_MESSAGE = (
     "I don't know. That question can't be answered from the data I have "
     "(College Scorecard, IPEDS and other public sources)."
 )
-NO_RESULTS_MESSAGE = "No schools in the data match that question."
+NO_RESULTS_MESSAGE = "I couldn't find data matching your question. Try rephrasing?"
 
 _client = None
 
@@ -110,15 +119,21 @@ def describe_sources(query: str) -> str:
     return "; ".join(sources)
 
 
-def write_summary(question: str, rows: list[dict], context: str) -> str:
+def write_summary(question: str, rows: list[dict], context: str, order: str | None = None) -> str:
     """Claude's summary, or a plain fallback if it cites a number not in the data."""
+    order_line = (
+        f"\n\nROW ORDER: the rows are ranked by {order}; row 1 is the top result. If the question asks "
+        f"for the top, best or a ranking, name row 1 as the top by {order} (there is no official ranking)."
+        if order and len(rows) > 1 else ""
+    )
     message = _get_client().messages.create(
         model=os.getenv("CLAUDE_MODEL", "claude-haiku-4-5"),
         max_tokens=300,
         system=SUMMARY_SYSTEM_PROMPT,
         messages=[{
             "role": "user",
-            "content": f'QUESTION: "{question}"\n\nDATA ({len(rows)} rows):\n{json.dumps(rows, default=str)}',
+            "content": f'QUESTION: "{question}"{order_line}\n\nDATA ({len(rows)} rows):\n'
+                       f"{json.dumps(rows, default=str)}",
         }],
     )
     # Keep only the first paragraph: the data is shown below, so a table or list is redundant.
@@ -145,6 +160,44 @@ def health():
 SUMMARY_ROW_LIMIT = 100
 
 
+def answer_question(question: str) -> tuple[AskResponse, list[dict], str]:
+    """The answer, the rows behind it, and the SQL or tool call that produced them."""
+    answer = plan_answer(question)
+    logger.info("Plan: kind=%s trace=%s", answer.kind, answer.trace)
+    trace = "\n".join(answer.trace)
+    if answer.kind == "cannot_answer":
+        return AskResponse(question=question, kind="cannot_answer", response=NO_ANSWER_MESSAGE), [], trace
+    if answer.kind == "clarify":
+        return AskResponse(question=question, kind="clarify", response=answer.clarification), [], trace
+
+    rows, notes = check_answer(question, answer.rows, answer.source)
+    rows = rows[:SUMMARY_ROW_LIMIT]
+    logger.info("Results: %d from %s", len(rows), answer.source)
+    if not rows:
+        return AskResponse(question=question, kind="no_results", response=NO_RESULTS_MESSAGE), [], answer.source
+
+    source = describe_sources(answer.source)
+    response = AskResponse(
+        question=question,
+        kind="result",
+        response=write_summary(question, rows, f"{source} {answer.source}", ranking_basis(answer.source)),
+        blocks=build_blocks(rows, answer.highlight),
+        notes=notes,
+        source=source,
+        schools_considered=len(rows),
+    )
+    return response, rows, answer.source
+
+
+def _log(question: str, sql: str | None, answer: str, started: float, kind: str) -> int | None:
+    """Log a question; logging problems never break the answer."""
+    try:
+        return app_logs.log_query(question, sql, answer, round((time.monotonic() - started) * 1000), kind)
+    except psycopg2.Error as e:
+        logger.error("Could not log query: %s", e)
+        return None
+
+
 @app.post("/ask", response_model=AskResponse)
 def ask(request: AskRequest):
     question = request.question.strip()
@@ -152,36 +205,44 @@ def ask(request: AskRequest):
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
     logger.info("Question: %s", question)
-
+    started = time.monotonic()
     try:
-        answer = plan_answer(question)
-        logger.info("Plan: kind=%s trace=%s", answer.kind, answer.trace)
-        if answer.kind == "cannot_answer":
-            return AskResponse(question=question, kind="cannot_answer", response=NO_ANSWER_MESSAGE)
-        if answer.kind == "clarify":
-            return AskResponse(question=question, kind="clarify", response=answer.clarification)
-
-        rows = answer.rows[:SUMMARY_ROW_LIMIT]
-        logger.info("Results: %d from %s", len(answer.rows), answer.source)
-        if not rows:
-            return AskResponse(question=question, kind="no_results", response=NO_RESULTS_MESSAGE)
-
-        source = describe_sources(answer.source)
-        return AskResponse(
-            question=question,
-            kind="result",
-            response=write_summary(question, rows, f"{source} {answer.source}"),
-            blocks=build_blocks(rows, answer.highlight),
-            source=source,
-            schools_considered=len(answer.rows),
-        )
-
+        response, _rows, sql = answer_question(question)
     except psycopg2.Error as e:
         logger.error("Database error: %s", e)
+        _log(question, None, f"Database error: {e}", started, "error")
         raise HTTPException(status_code=500, detail="Database error while answering the question")
     except anthropic.APIError as e:
         logger.error("Claude API error: %s", e)
+        _log(question, None, f"Claude API error: {e}", started, "error")
         raise HTTPException(status_code=502, detail="AI service error, please try again")
+
+    text = " ".join([response.response, *response.notes])
+    response.log_id = _log(question, sql, text, started, response.kind)
+    return response
+
+
+class FeedbackRequest(BaseModel):
+    log_id: int
+    rating: str  # "up" or "down"
+
+
+@app.post("/feedback")
+def feedback(request: FeedbackRequest):
+    if request.rating not in ("up", "down"):
+        raise HTTPException(status_code=400, detail="rating must be 'up' or 'down'")
+    if not app_logs.save_feedback(request.log_id, request.rating):
+        raise HTTPException(status_code=404, detail="Answer not found")
+    return {"saved": True}
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin(token: str | None = Query(default=None)):
+    """Usage dashboard. Open by default; set ADMIN_TOKEN to require /admin?token=..."""
+    expected = os.getenv("ADMIN_TOKEN")
+    if expected and token != expected:
+        raise HTTPException(status_code=401, detail="Admin token required")
+    return admin_page.render(app_logs.admin_stats())
 
 
 class NoteRequest(BaseModel):
