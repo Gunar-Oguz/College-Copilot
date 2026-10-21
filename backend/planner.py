@@ -7,36 +7,19 @@ clarification, or says it cannot answer).
 
 import json
 import os
-import re
 from dataclasses import dataclass, field
 
 import anthropic
 import psycopg2
 
 from database import UnsafeQueryError, get_latest_year, get_schema, run_readonly_query
+from guardrails import question_hints
 from locations import resolve_location
 from school_lookup import resolve_school
 from similar_schools import find_similar_schools
 
 MAX_TOOL_ROUNDS = 8
 
-# Added to the question only when it asks for universities, so the planner never applies the
-# filter to "schools" or "colleges" (it would otherwise second-guess rankings with trade schools).
-UNIVERSITY_RE = re.compile(r"\buniversit(y|ies)\b|\bfour[- ]year\b|\b4[- ]year\b", re.IGNORECASE)
-SCHOOLS_MEASURE_RE = re.compile(
-    r"graduat|complet|retention|admi(ssion|t)|accept|selective|cost|price|tuition|afford|cheap|expensive|"
-    r"earning|salar|debt|largest|biggest|smallest|enrollment|students|size", re.IGNORECASE)
-UNIVERSITY_HINT = (
-    "This question asks about universities or four-year colleges: when listing or ranking schools, add "
-    "schools.carnegie_class BETWEEN 15 AND 23 (doctoral, master's and baccalaureate institutions)."
-)
-
-
-def question_hints(question: str) -> str:
-    """Instructions that depend on the question's wording, decided in code for consistency."""
-    if UNIVERSITY_RE.search(question) and SCHOOLS_MEASURE_RE.search(question):
-        return UNIVERSITY_HINT
-    return ""
 PREVIEW_ROWS = 20
 
 INCOME_BRACKETS = [
@@ -50,7 +33,13 @@ INCOME_BRACKETS = [
 COLUMN_NOTES = """
 - schools has one row per (id, year). id is the IPEDS UNITID. Names are NOT unique.
 - Rates (admission_rate, completion_rate, retention_rate, pell_grant_rate, etc.) are decimals 0-1, e.g. 0.25 = 25%.
+- schools.admission_rate = 0 is a reporting error (no admissions reported); always add
+  admission_rate > 0 when filtering, sorting or counting by acceptance rate.
 - ownership: 1 = public, 2 = private nonprofit, 3 = private for-profit.
+- University systems are groups, not one school; list their campuses with these name patterns
+  (the only allowed name matching): UC = schools.name LIKE 'University of California-%';
+  CUNY = schools.name LIKE 'CUNY %'; SUNY = schools.name LIKE 'SUNY%' OR schools.name LIKE
+  'State University of New York%'.
 - cost_avg_net_price is average annual net price. cost_net_price_income_* are net price by family
   income bracket; always get the right column from net_price_column.
 - earnings_median_10yr is median earnings 10 years after entry, in dollars.
@@ -72,6 +61,20 @@ COLUMN_NOTES = """
   breakdowns (by race/gender/Pell, 4-year rates, room and board, endowment, faculty, test policy,
   crime, athletics, mobility, careers, ...).
 - school_designations has one row per (school, designation); to require two designations join it twice.
+
+VOCABULARY (how to sort when the question uses these words and names no other measure):
+- "top ranked", "best", "top universities/colleges": the data has no official rankings; ORDER BY
+  schools.completion_rate DESC, schools.earnings_median_10yr DESC and select both columns.
+- "most selective", "hardest to get into": ORDER BY schools.admission_rate ASC.
+- "cheapest", "most affordable", "low cost": ORDER BY schools.cost_avg_net_price ASC (what families
+  pay after aid) and also select ipeds_costs.tuition_fees_in_state and tuition_fees_out_of_state.
+- "highest paying", "best salary", "most money": ORDER BY schools.earnings_median_10yr DESC. For a
+  major, use programs.earnings_median_4yr (else earnings_median_1yr) for that cip_code, bachelor's
+  (credential_level = 3) unless another level is asked, programs.year = the latest year.
+- "safest", "lowest crime": join campus_crime, ORDER BY criminal_offenses_per_1000_students ASC and
+  only include schools with at least 1,000 students (schools.student_size >= 1000).
+- "best value": schools.earnings_median_10yr / NULLIF(schools.cost_avg_net_price, 0) AS value_ratio,
+  ORDER BY value_ratio DESC, selecting earnings and net price too.
 """.strip()
 
 TOOLS = [
@@ -225,7 +228,8 @@ RULES:
 - In run_query: filter schools.year = '{latest_year}' unless the question asks about other years;
   add only the filters the question asks for (no minimum size or extra conditions), and submit that
   result even if surprising schools (trade, beauty, adult schools) rank high;
-  select schools.id and schools.name plus every column used to filter or sort; exclude NULLs in
+  select schools.id and schools.name plus every column used to filter or sort, keeping the schema's
+  column names (use AS only for computed values); exclude NULLs in
   filtered or sorted columns; add LIMIT 50 unless a number or count is asked for.
 - If a named school can't be found or the data can't answer the question, submit cannot_answer.
   Subjective quality (best dorms, food, social life, prestige) is not in the data: cannot_answer.
@@ -262,6 +266,9 @@ class _Session:
                 return self._store(f"find_similar_schools({json.dumps(args)})", rows)
             if name == "run_query":
                 rows = run_readonly_query(args["sql"])
+                # Schools need their id (for Save buttons and source checks).
+                if rows and "name" in rows[0] and not {"id", "school_id"} & rows[0].keys():
+                    return json.dumps({"error": "Add schools.id to the SELECT and run the query again."})
                 return self._store(args["sql"], rows)
         except (UnsafeQueryError, psycopg2.Error, ValueError, TypeError, KeyError) as exc:
             message = getattr(exc, "pgerror", None) or str(exc)
@@ -272,6 +279,10 @@ class _Session:
         """Return an Answer, or an error message to send back to Claude."""
         kind = args.get("kind")
         if kind == "cannot_answer":
+            # Queries that ran fine but matched nothing mean "no results", not "can't answer".
+            if self.results and all(not rows for _, rows in self.results.values()):
+                source, rows = list(self.results.values())[-1]
+                return Answer("result", rows=rows, source=source, trace=self.trace)
             return Answer("cannot_answer", trace=self.trace)
         if kind == "clarify" and args.get("clarification"):
             return Answer("clarify", clarification=args["clarification"].strip(), trace=self.trace)

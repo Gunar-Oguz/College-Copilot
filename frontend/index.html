@@ -223,6 +223,30 @@
 
     .source { font-size: 0.75rem; color: var(--muted); }
 
+    .answer-notes { display: flex; flex-direction: column; gap: 4px; }
+    .answer-notes p {
+      font-size: 0.82rem;
+      color: #92400e;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 10px;
+      padding: 7px 10px;
+    }
+
+    .feedback { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); }
+    .feedback button {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.95rem;
+      line-height: 1.2;
+      align-self: auto;
+    }
+    .feedback button:hover:not(:disabled) { border-color: var(--brand); background: var(--brand-soft); opacity: 1; }
+    .feedback .thanks { color: #047857; font-weight: 600; }
+    .message.ai .feedback { margin-top: 6px; }
+
     /* Stat tiles */
     .stats {
       display: grid;
@@ -830,12 +854,43 @@
       const hint = hasSchools && authReady
         ? `<p class="sign-in-hint">♡ <button type="button" class="link-btn" data-auth="signin">Sign in</button> to save schools</p>`
         : "";
+      const notes = (data.notes || []).length
+        ? `<div class="answer-notes">${data.notes.map(n => `<p>${escapeHtml(n)}</p>`).join("")}</div>`
+        : "";
       return `<div class="card">
         <p class="summary">${escapeHtml(data.response)}</p>
+        ${notes}
         ${blocks}
         ${hint}
         ${source}
+        ${feedbackButtons(data.log_id)}
       </div>`;
+    }
+
+    function feedbackButtons(logId) {
+      if (!logId) return "";
+      return `<div class="feedback" data-log-id="${logId}">
+        <span>Was this helpful?</span>
+        <button type="button" data-rating="up" aria-label="Helpful" title="Helpful">👍</button>
+        <button type="button" data-rating="down" aria-label="Not helpful" title="Not helpful">👎</button>
+      </div>`;
+    }
+
+    async function sendFeedback(button) {
+      const box = button.closest(".feedback");
+      box.querySelectorAll("button").forEach(b => { b.disabled = true; });
+      try {
+        const res = await fetch("/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ log_id: Number(box.dataset.logId), rating: button.dataset.rating }),
+        });
+        if (!res.ok) throw new Error();
+        box.innerHTML = `<span class="thanks" role="status">Thanks for your feedback!</span>`;
+      } catch {
+        box.querySelectorAll("button").forEach(b => { b.disabled = false; });
+        showToast("Couldn't send feedback. Please try again.");
+      }
     }
 
     function scrollToBottom(smooth = true) {
@@ -926,7 +981,7 @@
         if (data.kind === "result") {
           addMessage("answer", renderAnswer(data));
         } else {
-          addMessage("ai", `<div class="bubble">${escapeHtml(data.response)}</div>`);
+          addMessage("ai", `<div class="bubble">${escapeHtml(data.response)}</div>${feedbackButtons(data.log_id)}`);
         }
       } catch {
         showError("Could not reach the server. Make sure the backend is running.");
@@ -1260,6 +1315,8 @@
     messages.addEventListener("click", event => {
       const heart = event.target.closest(".save-btn");
       if (heart) toggleSave(Number(heart.dataset.schoolId));
+      const vote = event.target.closest(".feedback button[data-rating]");
+      if (vote) sendFeedback(vote);
     });
     document.addEventListener("click", event => {
       const trigger = event.target.closest("[data-auth]");

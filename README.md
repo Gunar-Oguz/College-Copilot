@@ -101,8 +101,39 @@ Open **http://localhost:8000** — chat page and API on one URL.
 
 ```bash
 python -m pytest tests/              # unit + database tests
-python evals/run_eval.py             # answer accuracy (calls Claude, ~1-2 min)
+python backend/evals.py              # 30 end-to-end behavior checks (calls Claude, ~1 min)
+python evals/run_eval.py             # 70 exact answers vs. ground-truth SQL (calls Claude, ~2 min)
 ```
+
+`backend/evals.py` runs questions through the whole pipeline (planner, guardrails, summary) and checks
+behavior: "Top ranked university in Washington" has UW-Seattle in the top 3, "Cheapest UC school" is
+sorted by net price, college lists contain no adult-education programs, empty results say so, and so on.
+Run one category with `python backend/evals.py safety`. Both suites exit non-zero on any failure.
+
+## Answer guardrails (`guardrails.py`)
+
+- **Wording-based scope, decided in code:** "universities" / "four-year" lists use Carnegie classes 15-23;
+  "colleges" lists use degree-granting schools only (no adult-education or certificate-only programs).
+  Counts and averages keep every institution. Any non-degree school that slips into a college list is
+  removed, with a note.
+- **Rankings:** the data has no official rankings, so "top" / "best" answers say what they are ordered by
+  (e.g. "graduation rate, then median earnings"), and the summary names row 1 as the top by that measure.
+- **Fewer results than asked:** "Top 10 ... in Wyoming" explains that only 1 school matches.
+- **Nothing found:** "I couldn't find data matching your question. Try rephrasing?"
+- **Vocabulary** (in the planner prompt): best/top ranked → graduation rate then earnings; most selective →
+  acceptance rate (0% rates are reporting errors and skipped); cheapest → net price (tuition shown too);
+  highest paying → 10-year earnings (program earnings for a major); safest → crimes per 1,000 students
+  at schools with 1,000+ students; best value → earnings per $1 of net price.
+
+## Logging, feedback and admin
+
+- Every question is logged in `query_logs` (question, SQL or tool call, answer, response time, outcome).
+- 👍 / 👎 under each answer saves to `feedback` with the question and answer (one vote per answer).
+- **`/admin`**: questions today / all time, average response time, recent 👎 answers with their SQL,
+  most common questions, latest questions. It is open by default; set `ADMIN_TOKEN` in the environment
+  to require `/admin?token=...`.
+- The planner's SQL validator blocks `query_logs` and `feedback`, so answers can't expose other people's
+  questions.
 
 Try questions like:
 

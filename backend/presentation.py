@@ -6,7 +6,7 @@ Every number shown is formatted here from the rows, never written by the model.
 import re
 from decimal import ROUND_HALF_UP, Decimal
 
-HIDDEN_COLUMNS = {"id", "school_id", "role", "year", "latitude", "longitude"}
+HIDDEN_COLUMNS = {"id", "school_id", "role", "year", "latitude", "longitude", "carnegie_class", "highest_degree"}
 TEXT_COLUMNS = {"name", "title", "soc_code", "city", "state", "program_name", "credential_name", "cip_code", "school_url"}
 MAX_BARS = 25
 MAX_COMPARE_SCHOOLS = 6
@@ -50,6 +50,8 @@ COLUMNS = {
     "part_time_rate": ("Part-time students", "percent", None),
     "female_share": ("Women", "percent", None),
     "distance_miles": ("Distance", "miles", None),
+    "value_ratio": ("Earnings per $1 of net price", "number", "higher"),
+    "criminal_offenses_per_1000_students": ("Crimes per 1,000 students", "number", "lower"),
     "similarity": ("Similarity", "score", "higher"),
     "similar_on": ("Similar on", "list", None),
 }
