@@ -163,7 +163,7 @@ def _school_id(row: dict) -> int | None:
 
 
 def _label_for_row(row: dict) -> str:
-    return str(row.get("name") or row.get("program_name") or row.get("title") or row.get("state") or "Result")
+    return str(row.get("name") or row.get("program_name") or row.get("title") or row.get("school_type") or row.get("state") or "Result")
 
 
 def _stats_block(row: dict, columns: list[str]) -> dict:
