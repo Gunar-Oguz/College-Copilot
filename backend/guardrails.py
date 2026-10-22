@@ -18,8 +18,8 @@ UNIVERSITY_RE = re.compile(
     re.IGNORECASE,
 )
 COLLEGES_RE = re.compile(
-    r"\bcolleges\b|\buniversities\b|\bfour[- ]year\b|\b4[- ]year\b"
-    r"|\b(top|best|top[- ]ranked|highest[- ]ranked|ranked|cheapest|safest)\s+(\w+\s+){0,2}(college|university)\b",
+    r"\bcolleges\b|\buniversities\b|\bschools\b|\bfour[- ]year\b|\b4[- ]year\b"
+    r"|\b(top|best|top[- ]ranked|highest[- ]ranked|ranked|cheapest|safest)\s+(\w+\s+){0,2}(college|university|school)\b",
     re.IGNORECASE,
 )
 # Counts and averages keep every institution; the scope rules are for lists and rankings.
@@ -73,10 +73,10 @@ UNIVERSITY_HINT = (
     "schools.carnegie_class BETWEEN 15 AND 23 (doctoral, master's and baccalaureate institutions)."
 )
 COLLEGES_HINT = (
-    "This question asks about colleges: when listing or ranking schools, add schools.highest_degree >= 2 "
-    "(degree-granting; leaves out adult-education and certificate-only programs)."
+    "This question asks about colleges: when listing or ranking schools, add schools.highest_degree >= 3 "
+    "(bachelor's-granting; leaves out vocational, certificate-only and community college programs)."
 )
-NON_DEGREE_NOTE = "Left out {n} certificate-only or adult-education program{s}, since you asked about colleges."
+NON_DEGREE_NOTE = "Left out {n} vocational or community college program{s}, since you asked about colleges."
 RANKING_NOTE = "There's no official ranking in this data, so results are ordered by {basis}."
 SCORE_NOTE = ("Ranked by the CollegeCopilot Score: 40% graduation rate, 30% median earnings, "
               "20% selectivity and 10% student-faculty ratio, each compared with other colleges.")
@@ -132,7 +132,7 @@ def _non_degree_ids(ids: list[int]) -> set[int]:
     if not ids:
         return set()
     rows = execute_sql(
-        "SELECT id FROM schools WHERE id = ANY(%s) AND highest_degree < 2 "
+        "SELECT id FROM schools WHERE id = ANY(%s) AND highest_degree < 3 "
         "AND year = (SELECT max(year) FROM schools)",
         (ids,),
     )
