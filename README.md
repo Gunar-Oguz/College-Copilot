@@ -16,9 +16,13 @@ every number from the result rows.
 > **Access is by approval:** enter your email on the app, I receive a request and approve it, and
 > you get a personal link by email. This protects the paid AI API behind every answer.
 
-| Ask in plain English | School profile | Access request |
+| Net price for a family income (stat tiles) | Side-by-side comparison | Ranked chart |
 |---|---|---|
-| _screenshot pending_ | ![School profile](docs/screenshots/5-school-profile.png) | ![Access request](docs/screenshots/4-access-request.png) |
+| ![Stat tiles](docs/screenshots/1-stat-tiles.png) | ![Comparison](docs/screenshots/2-comparison.png) | ![Ranked bars](docs/screenshots/3-ranked-bars.png) |
+
+| School profile | Access request |
+|---|---|
+| ![School profile](docs/screenshots/5-school-profile.png) | ![Access request](docs/screenshots/4-access-request.png) |
 
 ## Features
 
@@ -111,10 +115,36 @@ same questions and the same truth.
 | `resolve_location` on ZIP codes and cities | **10 / 10** |
 | Planner system prompt | identical except one dropped column (`programs.id`) |
 
-**Model evals (pass rate by backend):** _pending_. The run needs a valid `ANTHROPIC_API_KEY`;
-the command is `python evals/run_eval.py --backend postgres` and
-`python evals/run_eval.py --backend duckdb --duckdb-path <file>` (about $1 per run with prompt
-caching; the runner prints the token count and cost).
+**Model evals, measured 2026-11-09** (Claude Haiku 4.5, same questions and same ground truth on both
+backends):
+
+| Suite | PostgreSQL | DuckDB (demo) |
+|---|---|---|
+| `evals/run_eval.py`: 70 questions with ground-truth SQL | **63 / 70 (90%)** | **64 / 70 (91%)** |
+| `backend/evals.py`: 34 end-to-end behavior checks | **34 / 34** | **34 / 34** |
+
+| Category (run_eval) | n | PostgreSQL | DuckDB |
+|---|---:|---:|---:|
+| lookup, count, aggregate, comparison, programs, trend | 27 | 27 | 27 |
+| ambiguous names (must ask) and unanswerable (must refuse) | 12 | 12 | 12 |
+| extra sources (IPEDS, mobility, research, designations, ...) | 9 | 9 | 9 |
+| ranking | 9 | 7 | 7 |
+| net price by income | 5 | 4 | 4 |
+| similar schools | 4 | 2 | 3 |
+| distance from a ZIP / city / school | 4 | 2 | 2 |
+
+No question failed on DuckDB only. Six failures are the same on both backends, and five of them come
+from one deliberate product rule: since #21, lists of "schools" are limited to bachelor's-granting
+institutions (`highest_degree >= 3`), while those older ground-truth queries count every
+institution (for example "Which 5 schools have the lowest acceptance rate?"). The sixth asks for
+5 similar schools and gets 10. The one extra PostgreSQL failure (`similar-ucla-easier`) is the
+model writing its own SQL instead of calling `find_similar_schools` in that run; it is not a
+database difference. The planner tokens for the two 70-question runs cost about $0.58 each.
+
+**Known limitation.** The summary check proves that every number in the sentence exists in the
+data, not that it is attached to the right school. In comparisons of three or more schools, Haiku
+sometimes credits a correct number to the wrong school; the table and chart below the sentence are
+always right, because code builds them. A per-school attribution check is the next improvement.
 
 ## Security
 
