@@ -16,6 +16,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 import altair as alt
 import anthropic
@@ -253,7 +254,7 @@ def landing_view(config: access.AccessConfig, link_error: str | None) -> None:
     for column, (title, text) in zip(st.columns(len(features)), features):
         column.html(f"<div class='cc-feature'><b>{title}</b><br><span>{text}</span></div>")
 
-    shots = sorted(p for p in SCREENSHOTS_DIR.glob("*.png") if "access" not in p.name)
+    shots = sorted(p for p in SCREENSHOTS_DIR.glob("*.png") if not any(x in p.name for x in ("access", "plans")))
     if shots:
         st.subheader("What it looks like")
         for tab, shot in zip(st.tabs([p.stem.split("-", 1)[-1].replace("-", " ").capitalize() for p in shots]), shots):
@@ -440,6 +441,68 @@ def answer(question: str, grant: dict) -> dict:
             "memory": answering.memory_of(response, rows)}
 
 
+# Plans as on the full app's pricing page (frontend/pricing.html). The demo has no payments.
+PRO_FEATURES = [
+    "Unlimited AI questions",
+    "Save unlimited schools to your portfolio",
+    "Compare up to 10 schools side by side",
+    "Deadline tracker with calendar export (.ics)",
+    "Access all student reviews",
+    "\"Why this school?\" personalized fit analysis",
+    "Export school lists to CSV",
+    "Application checklist for every school",
+    "Priority response queue",
+    "Early access to new features",
+]
+PLAN_ROWS = [
+    ("AI questions", "{limit} / day in this demo (10 / day in the full app)", "Unlimited"),
+    ("School search and profiles", "✓", "✓"),
+    ("Saved schools", "3", "Unlimited"),
+    ("Side-by-side compare", "3 schools", "10 schools"),
+    ("Student reviews", "Latest 2 per school", "All"),
+    ("Deadlines, CSV export, checklists, fit", "—", "✓"),
+]
+
+
+def plans_view(grant: dict, reason: str | None = None) -> None:
+    """Free vs Pro. Payments are not connected in the demo, so Pro is requested by email."""
+    budget = question_budget()
+    if reason == "visitor":
+        st.subheader("You've used today's free questions")
+        st.write(f"Approved visitors get {budget.per_visitor} questions a day; they reset at midnight UTC. "
+                 "Pro has no daily limit.")
+    elif reason == "daily":
+        st.subheader("The demo has reached today's limit")
+        st.write("The demo shares a daily budget for the paid AI service. Please come back after midnight UTC.")
+    else:
+        st.subheader("Plans")
+    free, pro = st.columns(2)
+    with free.container(border=True):
+        st.markdown("#### Free\n**$0** forever")
+        st.caption("Everything you need to start exploring colleges.")
+        st.markdown(f"- {budget.per_visitor} AI questions per day (demo)\n- School search and profiles\n"
+                    "- Save up to 3 schools\n- Compare up to 3 schools")
+    with pro.container(border=True):
+        st.markdown("#### Pro &nbsp; :orange-badge[MOST POPULAR]\n**$9** / month")
+        st.caption("For serious applicants building and tracking their college list.")
+        st.markdown("\n".join(f"- {feature}" for feature in PRO_FEATURES))
+        if st.button("Upgrade to Pro — coming soon", type="primary", width="stretch", key="upgrade"):
+            st.session_state["upgrade_note"] = True
+        if st.session_state.get("upgrade_note"):
+            st.info("Payments aren't connected in this demo, so nothing is charged here. The full CollegeCopilot "
+                    "app handles Pro subscriptions with Stripe. To try Pro, ask me by email.")
+            owner = access_config().owner_email
+            if owner:
+                subject = quote("CollegeCopilot Pro access")
+                body = quote(f"Hi Gulnar, I'd like Pro access to the CollegeCopilot demo. My email: {grant['email']}")
+                st.link_button("Request Pro access", f"mailto:{owner}?subject={subject}&body={body}",
+                               width="stretch")
+    st.markdown("**Compare plans**")
+    st.dataframe(pd.DataFrame([(feature, free_value.format(limit=budget.per_visitor), pro_value)
+                               for feature, free_value, pro_value in PLAN_ROWS],
+                              columns=["Feature", "Free", "Pro ($9/month)"]), hide_index=True, width="stretch")
+
+
 def chat_view(grant: dict) -> None:
     st.session_state.setdefault("messages", [])
     st.title("🎓 CollegeCopilot")
@@ -454,10 +517,14 @@ def chat_view(grant: dict) -> None:
         with st.chat_message("assistant", avatar="🎓"):
             render_response(message, index)
 
+    left = question_budget().peek(visitor_key(grant))
+    out_of_questions = left.daily_left == 0 or (left.visitor_left == 0 and not grant.get("owner"))
+    if out_of_questions:  # the upgrade view replaces the input; no AI call is possible
+        plans_view(grant, "daily" if left.daily_left == 0 else "visitor")
     typed = st.chat_input("Ask about colleges, e.g. \"Cheapest UC school for a family making $60,000\"",
-                          max_chars=500)
+                          max_chars=500, disabled=out_of_questions)
     question = (typed or st.session_state.pop("pending_question", None) or "").strip()
-    if question:
+    if question and not out_of_questions:
         with st.chat_message("user"):
             st.markdown(question)
         with st.chat_message("assistant", avatar="🎓"):
@@ -529,15 +596,20 @@ def profile_view() -> None:
 def sidebar(grant: dict) -> str:
     with st.sidebar:
         st.markdown("### 🎓 CollegeCopilot")
-        view = st.segmented_control("View", ["Ask", "School profile"], default="Ask", label_visibility="collapsed")
+        view = st.segmented_control("View", ["Ask", "School profile", "Plans"], default="Ask", key="view",
+                                    label_visibility="collapsed")
         st.caption(f"Signed in as {grant['email']}")
         budget = question_budget()
         left = budget.peek(visitor_key(grant))
         if grant.get("owner"):
             st.metric("Questions left today (whole demo)", left.daily_left)
         else:
-            st.metric("Your questions left today", min(left.visitor_left, left.daily_left))
-            st.caption(f"Limit {budget.per_visitor} per day, reset at midnight UTC.")
+            remaining = min(left.visitor_left, left.daily_left)
+            st.metric("Questions left today", f"{remaining} of {budget.per_visitor}")
+            st.progress(remaining / budget.per_visitor if budget.per_visitor else 0.0)
+            st.caption("Resets at midnight UTC.")
+            st.button("Plans", type="tertiary", icon=":material/workspace_premium:",
+                      on_click=lambda: st.session_state.update(view="Plans"))
         if st.button("New chat", width="stretch"):
             st.session_state["messages"] = []
             st.rerun()
@@ -567,8 +639,11 @@ def main() -> None:
     except demo_data.DataFileError as exc:
         st.error(f"The database could not be loaded: {exc}")
         return
-    if sidebar(grant) == "School profile":
+    view = sidebar(grant)
+    if view == "School profile":
         profile_view()
+    elif view == "Plans":
+        plans_view(grant)
     else:
         chat_view(grant)
     footer()

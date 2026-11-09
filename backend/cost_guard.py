@@ -2,7 +2,7 @@
 Limits that protect the paid AI API in the public demo (in memory, no database).
 
 - Per visitor: QUESTIONS_PER_VISITOR questions per UTC day, keyed by the visitor's access email
-  (so opening a new tab does not reset it; the default is 20).
+  (so opening a new tab does not reset it; the default is 5).
 - Whole app: QUESTIONS_PER_DAY questions per UTC day across all visitors (default 200).
 
 Counts reset at midnight UTC and when the process restarts. Questions answered without the AI
@@ -13,7 +13,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-DEFAULT_PER_VISITOR = 20
+DEFAULT_PER_VISITOR = 5
 DEFAULT_PER_DAY = 200
 
 

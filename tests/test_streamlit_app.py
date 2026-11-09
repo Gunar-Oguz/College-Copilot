@@ -81,21 +81,47 @@ def test_valid_access_link_unlocks_the_chat_and_answers(app):
     at.run()
     assert not at.exception and at.chat_input
     assert any("visitor@example.com" in c.value for c in at.sidebar.caption)
-    assert at.sidebar.metric[0].value == "2"
+    assert at.sidebar.metric[0].value == "2 of 2"
 
     at.chat_input[0].set_value("What is UCLA's graduation rate?").run()
     assert not at.exception
     assert [m.value for m in at.metric if m.label == "Graduation rate"] == ["92.6%"]
     assert any("graduation rate is 92.6%" in m.value for m in at.markdown)
-    assert at.sidebar.metric[0].value == "1"
+    assert at.sidebar.metric[0].value == "1 of 2"
 
     at.chat_input[0].set_value("And Berkeley?").run()  # follow-ups carry the earlier turn
     question, history = app.questions[-1]
     assert question == "And Berkeley?" and history[0]["question"] == "What is UCLA's graduation rate?"
 
-    at.chat_input[0].set_value("And Stanford?").run()  # over the limit of 2
-    assert len(app.questions) == 2
-    assert any("used all 2 questions" in w.value for w in at.warning)
+    # The limit of 2 is reached: the upgrade view replaces the chat input.
+    assert at.sidebar.metric[0].value == "0 of 2"
+    assert any("used today's free questions" in s.value for s in at.subheader)
+    assert at.chat_input[0].disabled
+
+
+def test_limit_reached_shows_the_upgrade_view_without_calling_the_planner(app):
+    at = app(QUESTIONS_PER_VISITOR="1")
+    at.query_params["access"] = access_link_token()
+    at.run()
+    at.chat_input[0].set_value("What is UCLA's graduation rate?").run()
+    assert len(app.questions) == 1
+    assert any("used today's free questions" in s.value for s in at.subheader)
+    upgrade = next(b for b in at.button if b.label == "Upgrade to Pro — coming soon")
+    assert any("$9" in m.value for m in at.markdown)
+    upgrade.click().run()
+    assert any("Payments aren't connected" in i.value for i in at.info)  # no checkout is pretended
+    [link] = at.get("link_button")
+    assert link.proto.label == "Request Pro access" and link.proto.url.startswith(f"mailto:{OWNER}?")
+    assert len(app.questions) == 1  # the planner was never called again
+
+
+def test_plans_link_opens_the_plans_view(app):
+    at = app()
+    at.query_params["access"] = access_link_token()
+    at.run()
+    next(b for b in at.sidebar.button if b.label == "Plans").click().run()
+    assert [s.value for s in at.subheader] == ["Plans"]
+    assert any(b.label == "Upgrade to Pro — coming soon" for b in at.button)
 
 
 def test_vague_question_gets_quick_replies_without_using_the_ai(app):
@@ -105,7 +131,7 @@ def test_vague_question_gets_quick_replies_without_using_the_ai(app):
     at.chat_input[0].set_value("Help me find a good school").run()
     assert not app.questions and "📍" not in "".join(b.label for b in at.button)
     assert any("specific location" in b.label for b in at.button)
-    assert at.sidebar.metric[0].value == "2"
+    assert at.sidebar.metric[0].value == "2 of 2"
 
 
 def test_request_access_emails_the_owner(app):
