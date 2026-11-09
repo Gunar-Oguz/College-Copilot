@@ -18,7 +18,7 @@ from database import execute_sql, get_data_sources, get_latest_year
 from guardrails import (QUICK_REPLIES, VAGUE_MESSAGE, aid_note, check_answer, ranking_basis,
                         schools_named_in)
 from planner import MODEL, plan_answer
-from presentation import build_blocks, unsupported_numbers
+from presentation import attribution_problems, build_blocks, unsupported_numbers
 from school_profile import school_basics
 
 logger = logging.getLogger(__name__)
@@ -55,6 +55,9 @@ RULES:
 - The rows are already in the answer's order: the first row is the top, best or cheapest result.
   Never call a different school the top one, and never use reputation or outside rankings.
 - When comparing two numbers, say "up" or "higher" only if the later or named value is larger.
+- Put the school's name right next to every number about it ("Yale's graduation rate is 96.0%"), and
+  before calling a school the highest, lowest, cheapest or most selective, check every row for that
+  column. With three or more schools, prefer one short clause per school.
 - If values the question needs are null, say they are not reported.
 - If the question asks about financial aid, scholarships or grants and the data has net price, explain
   the link in a short clause: net price is what students pay after financial aid, so a lower net price
@@ -90,7 +93,30 @@ def fallback_summary(rows: list[dict]) -> str:
         return f"{len(rows) - 1} schools similar to {reference.get('name')}."
     if len(rows) == 1 and rows[0].get("name"):
         return f"Here is the data for {rows[0]['name']}."
+    names = [str(r["name"]) for r in rows if r.get("name")]
+    if 2 <= len(names) == len(rows) <= 6:
+        return f"Here is how {', '.join(names[:-1])} and {names[-1]} compare."
     return f"Found {len(rows)} results."
+
+
+def school_aliases(rows: list[dict]) -> dict[int, list[str]]:
+    """Known nicknames of the schools in the rows (e.g. 'UCLA'), for the attribution check."""
+    ids = list({r.get("id", r.get("school_id")) for r in rows} - {None})
+    ids = [i for i in ids if isinstance(i, int)]
+    if len(ids) < 2:
+        return {}
+    aliases: dict[int, list[str]] = {}
+    for row in execute_sql("SELECT school_id, alias FROM school_aliases WHERE school_id = ANY(%s)", (ids,)):
+        aliases.setdefault(row["school_id"], []).append(row["alias"])
+    return aliases
+
+
+def summary_problems(summary: str, rows: list[dict], context: str, aliases: dict[int, list[str]]) -> list[str]:
+    """Why a summary can't be shown: numbers not in the data, or credited to the wrong school."""
+    bad = unsupported_numbers(summary, rows, context)
+    if bad:
+        return [f"numbers not in the data: {', '.join(bad)}"]
+    return attribution_problems(summary, rows, context, aliases)
 
 
 def describe_sources(query: str) -> str:
@@ -105,29 +131,35 @@ def describe_sources(query: str) -> str:
 
 
 def write_summary(question: str, rows: list[dict], context: str, order: str | None = None) -> str:
-    """Claude's summary, or a plain fallback if it cites a number not in the data."""
+    """Claude's summary if every number in it is in the data and credited to the right school.
+
+    A summary that fails is regenerated once with the problems listed; if that fails too, a plain
+    summary written in code is shown instead.
+    """
     order_line = (
         f"\n\nROW ORDER: the rows are ranked by {order}; row 1 is the top result. If the question asks "
         f"for the top, best or a ranking, name row 1 as the top by {order} (there is no official ranking)."
         if order and len(rows) > 1 else ""
     )
-    message = _get_client().messages.create(
-        model=MODEL,
-        max_tokens=300,
-        system=SUMMARY_SYSTEM_PROMPT,
-        messages=[{
-            "role": "user",
-            "content": f'QUESTION: "{question}"{order_line}\n\nDATA ({len(rows)} rows):\n'
-                       f"{json.dumps(rows, default=str)}",
-        }],
-    )
-    # Keep only the first paragraph: the data is shown below, so a table or list is redundant.
-    summary = message.content[0].text.strip().split("\n\n")[0].strip()
-    bad = unsupported_numbers(summary, rows, f"{question} {context}")
-    if bad:
-        logger.warning("Summary dropped, numbers not in data: %s | %s", bad, summary)
-        return fallback_summary(rows)
-    return summary
+    messages = [{
+        "role": "user",
+        "content": f'QUESTION: "{question}"{order_line}\n\nDATA ({len(rows)} rows):\n'
+                   f"{json.dumps(rows, default=str)}",
+    }]
+    aliases = school_aliases(rows)
+    for attempt in range(2):
+        message = _get_client().messages.create(
+            model=MODEL, max_tokens=300, system=SUMMARY_SYSTEM_PROMPT, messages=messages)
+        # Keep only the first paragraph: the data is shown below, so a table or list is redundant.
+        summary = message.content[0].text.strip().split("\n\n")[0].strip()
+        problems = summary_problems(summary, rows, f"{question} {context}", aliases)
+        if not problems:
+            return summary
+        logger.warning("Summary rejected (attempt %d): %s | %s", attempt + 1, problems, summary)
+        messages += [{"role": "assistant", "content": summary},
+                     {"role": "user", "content": "That summary has errors: " + "; ".join(problems)
+                      + ". Rewrite it from the data, naming the school next to each number."}]
+    return fallback_summary(rows)
 
 
 

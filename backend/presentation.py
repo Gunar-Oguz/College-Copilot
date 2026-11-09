@@ -373,3 +373,145 @@ def unsupported_numbers(summary: str, rows: list[dict], context: str) -> list[st
                 else:
                     allowed |= _number_forms(v)
     return [token for token, norm in _tokens(summary) if norm not in allowed]
+
+
+# ---------- attribution: is each number credited to the right school? ----------
+
+_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
+_CLAUSE_RE = re.compile(r";\s*(?:however,?\s*)?|,\s*(?:while|whereas|but|and|followed by)\s+|\s+while\s+|\s+whereas\s+",
+                        re.IGNORECASE)
+_COMPARISON_RE = re.compile(r"\b(vs\.?|versus|compared (?:to|with)|than|relative to)\b", re.IGNORECASE)
+_SUPERLATIVE_RE = re.compile(
+    r"\b(most expensive|least expensive|most affordable|most selective|least selective|"
+    r"highest|lowest|most|least|cheapest|largest|smallest|biggest|fewest|greatest)\b", re.IGNORECASE)
+_MIN_WORDS = {"lowest", "least", "cheapest", "smallest", "fewest", "least expensive", "most affordable",
+              "most selective"}
+_MAX_WORDS = {"highest", "most", "largest", "biggest", "greatest", "most expensive", "least selective"}
+# "More selective" means a lower acceptance rate; multi-word phrases are matched before single words.
+_HIGHER_PHRASES = ["more expensive", "less affordable", "less selective"]
+_LOWER_PHRASES = ["more affordable", "less expensive", "more selective"]
+_HIGHER_WORDS = ["higher", "more", "greater", "larger", "bigger", "pricier"]
+_LOWER_WORDS = ["lower", "less", "fewer", "smaller", "cheaper"]
+_HIGHER_RE = re.compile("|".join(_HIGHER_PHRASES + _HIGHER_WORDS), re.IGNORECASE)
+_COMPARATIVE_RE = re.compile(r"\b(" + "|".join(_HIGHER_PHRASES + _LOWER_PHRASES + _HIGHER_WORDS + _LOWER_WORDS)
+                             + r")\b", re.IGNORECASE)
+_ORDINAL_BEFORE_RE = re.compile(r"\b(second|third|fourth|fifth|next)[\s-]*$", re.IGNORECASE)
+_NUMBER_TEXT = r"\$?\d[\d,]*(?:\.\d+)?%?(?:k\b|\s(?:million|billion)\b)?"
+_PAIR_RE = re.compile(rf"({_NUMBER_TEXT})\)?,?\s*(?:vs\.?|versus|compared (?:to|with)|than)\s+"
+                      rf"[^\d$]{{0,40}}?({_NUMBER_TEXT})", re.IGNORECASE)
+_NAME_SUFFIXES = (" University", " College", " Institute of Technology")
+_NAME_PREFIXES = ("University of ", "The ")
+
+
+def _name_variants(name: str) -> set[str]:
+    """Ways a summary may name a school: full name, campus, short name ("Harvard", "Berkeley", "UC Berkeley")."""
+    variants = {name}
+    parts = [p.strip() for p in name.split("-") if p.strip()]
+    if len(parts) > 1:
+        variants |= {parts[0], parts[-1]}
+        if parts[0] == "University of California":
+            variants.add(f"UC {parts[-1]}")
+    for base in list(variants):
+        for prefix in _NAME_PREFIXES:
+            if base.startswith(prefix) and len(base) > len(prefix) + 2:
+                variants.add(base[len(prefix):])
+        for suffix in _NAME_SUFFIXES:
+            if base.endswith(suffix) and len(base) > len(suffix) + 2:
+                variants.add(base[: -len(suffix)])
+    return {v for v in variants if len(v) >= 3}
+
+
+def _entities(rows: list[dict], aliases: dict[int, list[str]] | None) -> list[tuple[int, re.Pattern]]:
+    """(row index, pattern matching any unambiguous name of that row's school)."""
+    names: dict[int, set[str]] = {}
+    for i, row in enumerate(rows):
+        if not row.get("name"):
+            continue
+        variants = _name_variants(str(row["name"]))
+        school_id = row.get("id", row.get("school_id"))
+        variants |= {a for a in (aliases or {}).get(school_id, []) if len(a) >= 2}
+        names[i] = variants
+    counts: dict[str, int] = {}
+    for variants in names.values():
+        for v in {x.lower() for x in variants}:
+            counts[v] = counts.get(v, 0) + 1
+    entities = []
+    for i, variants in names.items():
+        unique = sorted((v for v in variants if counts[v.lower()] == 1), key=len, reverse=True)
+        if unique:
+            entities.append((i, re.compile(r"(?<![\w])(" + "|".join(map(re.escape, unique)) + r")(?![\w])",
+                                           re.IGNORECASE)))
+    return entities
+
+
+def _row_forms(row: dict) -> dict[str, set[str]]:
+    """Each numeric column of a row -> the ways its value may be written."""
+    return {k: _number_forms(v) for k, v in row.items() if _to_float(v) is not None}
+
+
+def _extreme_ok(rows: list[dict], row: dict, column: str, word: str) -> bool:
+    values = [_to_float(r.get(column)) for r in rows]
+    values = [v for v in values if v is not None]
+    mine = _to_float(row.get(column))
+    if mine is None or len(values) < 2:
+        return True
+    return mine == (min(values) if word in _MIN_WORDS else max(values))
+
+
+def attribution_problems(summary: str, rows: list[dict], context: str = "",
+                         aliases: dict[int, list[str]] | None = None) -> list[str]:
+    """Problems with who the summary credits each number to; empty when it is consistent with the rows.
+
+    The summary is split into sentences and clauses. A clause that names schools may only cite numbers
+    from those schools' rows (a clause naming none continues the previous clause's subject; a "vs" clause
+    may also use the sentence's other schools). Superlatives ("highest graduation rate at 93.2%") must be
+    true for the school holding that value, and "higher/lower ... A vs B" must match the order of A and B.
+    Numbers from the question, column labels and small counts are always allowed.
+    """
+    entities = _entities(rows, aliases)
+    if len(entities) < 2:
+        return []  # nothing to confuse
+    keys = _all_keys(rows)
+    free = {norm for _, norm in _tokens(f"{context} {' '.join(keys + [column_meta(k)[0] for k in keys])}")}
+    free |= {str(n) for n in range(0, max(len(rows), 10) + 1)}
+    forms = [_row_forms(r) for r in rows]
+    problems = []
+    for sentence in _SENTENCE_RE.split(summary.strip()):
+        clauses = [c for c in _CLAUSE_RE.split(sentence) if c and c.strip()]
+        in_sentence = {i for i, pattern in entities if pattern.search(sentence)}
+        subject: set[int] = set()
+        for clause in clauses:
+            named = {i for i, pattern in entities if pattern.search(clause)}
+            subject = named or subject
+            allowed = subject | (in_sentence if _COMPARISON_RE.search(clause) else set())
+            if not allowed:
+                continue
+            numbers = [(token, norm) for token, norm in _tokens(clause) if norm not in free]
+            for token, norm in numbers:
+                if not any(norm in f for i in allowed for f in forms[i].values()):
+                    problems.append(f"{token} is not a value of the school(s) named in: {clause.strip()!r}")
+            # Superlatives: the first number after "highest"/"lowest"/... must be the extreme of its column.
+            for match in _SUPERLATIVE_RE.finditer(clause):
+                if _ORDINAL_BEFORE_RE.search(clause[:match.start()]):
+                    continue  # "second-highest" ranks, it doesn't claim the top
+                word = match.group(1).lower()
+                after = [norm for _, norm in _tokens(clause[match.end():]) if norm not in free][:1]
+                if not after:
+                    # "X is the most selective" with no number: check the acceptance rate itself.
+                    if word.endswith("selective") and named and "admission_rate" in keys and \
+                            not any(_extreme_ok(rows, rows[i], "admission_rate", word) for i in named):
+                        problems.append(f"'{word}' is not true for the school named in: {clause.strip()!r}")
+                    continue
+                holders = [(i, col) for i in allowed for col, f in forms[i].items() if after[0] in f]
+                if holders and not any(_extreme_ok(rows, rows[i], col, word) for i, col in holders):
+                    problems.append(f"'{word}' is not true for {after[0]} in: {clause.strip()!r}")
+            # "higher ... A vs B": A must be larger than B (and the reverse for "lower").
+            for pair in _PAIR_RE.finditer(clause):
+                words = list(_COMPARATIVE_RE.finditer(clause[:pair.start()]))
+                a, b = (_tokens(pair.group(g)) for g in (1, 2))
+                if not words or not a or not b or a[0][1] == b[0][1]:
+                    continue
+                says_higher = bool(_HIGHER_RE.fullmatch(words[-1].group(1)))
+                if (float(a[0][1]) > float(b[0][1])) != says_higher:
+                    problems.append(f"'{words[-1].group(1)}' contradicts {pair.group(0)!r} in: {clause.strip()!r}")
+    return problems
