@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 BACKEND_DIR = Path(__file__).resolve().parents[1] / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
+import answering  # noqa: E402
 import app_logs  # noqa: E402
 import main  # noqa: E402
 import plans  # noqa: E402
@@ -79,8 +80,8 @@ def client(monkeypatch):
                           standalone_question="What is MIT's acceptance rate?")
         return Answer("clarify", clarification="Which one?", vague=question == "Which school is right for me?")
 
-    monkeypatch.setattr(main, "plan_answer", fake_plan)
-    monkeypatch.setattr(main, "write_summary", lambda asked, *a: f"summary of: {asked}")
+    monkeypatch.setattr(answering, "plan_answer", fake_plan)
+    monkeypatch.setattr(answering, "write_summary", lambda asked, *a: f"summary of: {asked}")
     monkeypatch.setattr(plans, "visitor_id", lambda ip: "pytest:visitor")
     app_logs.ensure_log_tables()
     plans.ensure_plan_tables()

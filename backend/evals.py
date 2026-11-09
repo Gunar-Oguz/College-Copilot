@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from database import execute_sql  # noqa: E402
-from main import answer_question  # noqa: E402
+from answering import answer_question  # noqa: E402
 
 WORKERS = 4
 UCLA, BERKELEY, USC, STANFORD, MIT, HARVARD, YALE, MICHIGAN = (
@@ -145,7 +145,7 @@ def summary_names_first_row():
     def check(resp, rows):
         first = str(rows[0].get("name", "")) if rows else ""
         short = re.split(r"-| Campus", first)[0].strip()
-        return bool(short) and short.lower() in resp.response.lower(), f"summary doesn't name {short!r}: {resp.response[:160]}"
+        return bool(short) and short.lower() in resp.response.lower(), f"summary doesn't name {short!r}: {resp.response[:160]}"  # noqa: E501
     return check
 
 
