@@ -1,43 +1,245 @@
 # CollegeCopilot
 
-AI-powered college search tool for admissions counselors.
+[![CI](https://github.com/Gunar-Oguz/College-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Gunar-Oguz/College-Copilot/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%20%7C%203.13-blue)
+![Tests](https://img.shields.io/badge/tests-308%20passing-brightgreen)
+![Ruff](https://img.shields.io/badge/lint-ruff-261230)
 
-## How it answers a question
+An AI college-search assistant for admissions counselors. You ask about U.S. colleges in plain
+English ("What would MIT cost for a family making $150,000?") and get an answer built from federal
+data: stat tiles, comparison tables, ranked charts and a one-sentence summary. **The numbers never
+come from the model.** Claude plans read-only SQL through a small set of tools, and code formats
+every number from the result rows.
 
-1. **Planner** (`planner.py`): Claude reads the question and calls tools. It never states facts itself.
+### [▶ Open the live app](https://college-copilot-gulnar.streamlit.app)
+
+> **Access is by approval:** enter your email on the app, I receive a request and approve it, and
+> you get a personal link by email. This protects the paid AI API behind every answer.
+
+| Ask in plain English | School profile | Access request |
+|---|---|---|
+| _screenshot pending_ | ![School profile](docs/screenshots/5-school-profile.png) | ![Access request](docs/screenshots/4-access-request.png) |
+
+## Features
+
+- **Questions in plain English** about 6,273 institutions: cost by family income, acceptance,
+  graduation and retention rates, earnings (overall and by major), debt, distance from a ZIP code
+  or city, campus safety, athletics, research spending, accreditation, application deadlines.
+- **Comparisons and rankings**: side-by-side tables with the better value marked, ranked bar charts,
+  and "schools like X but easier to get into / cheaper / in these states" similarity search.
+- **Follow-up questions** ("only the public ones", "and in Texas?") reuse the earlier turns.
+- **Clarifying questions** when a name is ambiguous ("UW": Washington or Wisconsin?), quick replies
+  for vague questions, and honest "I don't know" answers with what *is* known about the school.
+- **CollegeCopilot Score**: a transparent ranking of about 3,100 degree-granting colleges.
+- **25 public data sources** (College Scorecard, IPEDS and others); every table and column is
+  documented in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
+
+## How the AI answers
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant G as Guardrails (code)
+    participant P as Planner (Claude + tools)
+    participant DB as Database (read-only)
+    participant V as Presentation (code)
+    U->>G: question (+ earlier turns)
+    G->>P: question + scope hints ("schools" = bachelor's-granting, aid = net price)
+    loop up to 8 tool rounds
+        P->>DB: resolve_school / resolve_location / net_price_column / find_similar_schools
+        P->>DB: run_query(SELECT ...) through the validator
+        DB-->>P: result id, row count, 20-row preview (or the error, to fix and retry)
+    end
+    P->>G: submit_answer(result_id | clarify | cannot_answer)
+    G->>V: rows after scope filters + notes (ranking basis, fewer results than asked)
+    V->>U: stat tiles / comparison / ranked bars / table + 1-2 sentence summary
+```
+
+1. **Planner** (`backend/planner.py`): Claude (Haiku 4.5) reads the question and calls tools. It
+   never states facts itself; it finishes by submitting the *id* of a tool result.
    - `resolve_school`: name or nickname → school ids and coordinates (asks which one if ambiguous)
    - `resolve_location`: ZIP code or city → coordinates, used with the `miles_between()` SQL function
    - `net_price_column`: family income → the right net-price bracket
    - `find_similar_schools`: "schools like X" with optional easier / cheaper / state filters
-   - `run_query`: read-only SQL (validated, 5s timeout, row cap)
+   - `run_query`: one read-only `SELECT`, validated, with a 5-second timeout and a 500-row cap
    - `submit_answer`: a tool result, a clarifying question, or "can't answer"
-2. **Presentation** (`presentation.py`): the rows become stat tiles, a comparison table, ranked bars
-   or a table. Every number shown is formatted from the data. Claude writes only a one- or
-   two-sentence summary, which is replaced by a plain one if it cites a number not in the data.
+2. **Guardrails** (`backend/guardrails.py`): decided in code, not left to the model (see below).
+3. **Presentation** (`backend/presentation.py`): rows become stat tiles, a comparison table, ranked
+   bars or a table. Every number shown is formatted from the data. Claude writes only a one- or
+   two-sentence summary, and the summary is **replaced by a plain one if it cites any number that is
+   not in the rows**.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph demo["Live demo (Streamlit Community Cloud)"]
+        ST["streamlit_app.py<br/>access gate + cost guard"] --> AQ["answering.py<br/>planner · guardrails · presentation"]
+        AQ --> DK[("DuckDB file, read-only<br/>30 MB, SHA-256 pinned")]
+        GH["GitHub Release asset"] -. downloaded once, verified .-> DK
+    end
+    subgraph full["Full app"]
+        FE["frontend/*.html"] --> API["FastAPI main.py"]
+        API --> AQ2["answering.py"]
+        AQ2 --> PG[("PostgreSQL<br/>+ pg_trgm")]
+        API --> SB["Supabase Auth"]
+        API --> SP["Stripe (Pro $9/mo)"]
+    end
+    AQ --> CL["Claude API"]
+    AQ2 --> CL
+```
+
+The same `answering.py` pipeline runs in both. `backend/database.py` chooses the backend
+(`DB_BACKEND`, or `DUCKDB_PATH` for DuckDB); application SQL is written once with psycopg2
+placeholders and translated for DuckDB.
+
+## Evaluation
+
+Two suites call the real model: `evals/run_eval.py` (70 questions with ground-truth SQL: lookups,
+rankings, counts, net price by income, comparisons, aggregates, majors, trends, ambiguous names,
+similar schools, ZIP/city distance, the extra sources, and questions it must refuse) and
+`backend/evals.py` (30 end-to-end behavior checks). The ground truth always comes from PostgreSQL;
+`--backend duckdb` runs the planner on the demo database, so the two backends are compared on the
+same questions and the same truth.
+
+**Backend parity, measured 2026-11-09** (no model involved):
+
+| Check | Result |
+|---|---|
+| Ground-truth queries returning identical rows on PostgreSQL and DuckDB | **56 / 56** |
+| `resolve_school` on 379 names, nicknames and misspellings: same ids and scores | **376 / 379** (the 3 differ only in the order of exactly tied candidates, which PostgreSQL leaves undefined) |
+| `resolve_location` on ZIP codes and cities | **10 / 10** |
+| Planner system prompt | identical except one dropped column (`programs.id`) |
+
+**Model evals (pass rate by backend):** _pending_. The run needs a valid `ANTHROPIC_API_KEY`;
+the command is `python evals/run_eval.py --backend postgres` and
+`python evals/run_eval.py --backend duckdb --duckdb-path <file>` (about $1 per run with prompt
+caching; the runner prints the token count and cost).
+
+## Security
+
+- **Read-only SQL, three layers.** The validator allows one `SELECT`/`WITH` statement, strips
+  comments and blocks file and network functions (`pg_*`, `dblink`, `COPY`, `INTO`, DuckDB's
+  `read_*`, `glob`, `query()`, `ATTACH`, `INSTALL`, `PRAGMA`), user tables (`user_*`) and log and
+  billing tables. PostgreSQL then runs it in a read-only transaction; DuckDB opens the file with
+  `read_only=True` and `enable_external_access=false`, so even a query that slipped past the
+  validator cannot write or read a file.
+- **Timeout and row cap.** 5 seconds (`statement_timeout` on PostgreSQL, a watchdog thread calling
+  `interrupt()` on DuckDB) and at most 500 rows.
+- **No private data in the demo.** The export copies only public tables; user, review, log and
+  billing tables never leave PostgreSQL.
+- **Signed access links.** Approve and access links are HMAC-SHA256 tokens (URL-safe base64) with a
+  purpose, an expiry (7 and 30 days) and the visitor's email; verified with constant-time comparison.
+  Approving needs a button press, so email link scanners cannot approve by opening the link. The
+  request form gives the same reply whatever happens, is rate-limited per session and globally, and
+  never reveals whether an email was approved.
+- **Cost caps.** 20 questions per visitor per UTC day and 200 per day for the whole demo (both
+  configurable). Questions answered without the AI are not counted.
+- **Verified data.** The demo downloads the database once and checks its SHA-256 against
+  [data/duckdb_manifest.json](data/duckdb_manifest.json) before opening it.
+
+## Tests and CI
+
+```bash
+pip install -r requirements-dev.txt
+ruff check .
+python -m pytest            # 308 tests; PostgreSQL tests skip when no database is reachable
+```
+
+- DuckDB backend tests run on a tiny synthetic database built in a temporary folder
+  (`tests/conftest.py`): query runner, validator rules, timeout, `miles_between()`, PostgreSQL-like
+  division and NULL order, the Python pg_trgm matcher (checked against PostgreSQL's values), lookups,
+  similar schools, guardrails and school profiles.
+- Access gate (sign/verify, tampering, expiry, wrong purpose, emails, SMTP over TLS), cost guard
+  (limits, UTC rollover, thread safety) and the data download (hash check, cache, corrupt cache).
+- Streamlit `AppTest` smoke tests: the gate, a valid link opening the chat, an answer rendered as
+  stat tiles, follow-ups, limits, the request and approve flow, owner passcode, school profile.
+  The answer pipeline is replaced by a fake, so tests make no API or network calls.
+- GitHub Actions ([ci.yml](.github/workflows/ci.yml)) runs ruff and pytest on Python 3.11 and 3.13.
+
+## Design decisions and trade-offs
+
+- **DuckDB for the demo.** A free host has no PostgreSQL. All 25 sources plus ten years of
+  programs fit in a 30 MB DuckDB file (from 431 MB in PostgreSQL), which loads in seconds and needs
+  no server. The cost is a dialect gap, closed in `database.py` rather than in the prompt: integer
+  division and NULL ordering are set to PostgreSQL's behavior, `::numeric` casts become `DOUBLE`
+  (DuckDB's `NUMERIC` would round to 3 decimals), `miles_between()` is a macro, and pg_trgm name
+  matching runs in Python. The model writes the same SQL on both backends.
+- **Stateless signed tokens instead of a user table.** Streamlit Community Cloud has no durable
+  storage. Signed links need no database, survive restarts, and are revoked all at once by changing
+  `ACCESS_SECRET`. The trade-off: one link cannot be revoked alone (links expire after 30 days).
+- **Gated access.** Every answer costs two Claude calls. Approval keeps a public portfolio link from
+  becoming an open, paid API; the per-visitor and daily caps are the second line.
+- **In-memory limits.** Counters reset when the app restarts, which is acceptable for a demo; the
+  full app keeps usage in PostgreSQL with an atomic check-and-increment.
+- **Haiku for planning.** Planning is tool calls and short SQL, so the fast, inexpensive model is
+  enough; the prompt (schema plus notes, about 15k tokens) is cached across questions.
+
+## Run locally
+
+**Demo (Streamlit + DuckDB):**
+
+```bash
+pip install -r requirements.txt
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # add your ANTHROPIC_API_KEY
+python scripts/export_duckdb.py --out ~/collegecopilot.duckdb  # needs the PostgreSQL data
+DUCKDB_PATH=~/collegecopilot.duckdb streamlit run streamlit_app.py
+```
+
+Without `DUCKDB_PATH` the app downloads the published file. For local development,
+`ACCESS_GATE = "off"` skips the gate and `DEV_PRINT_LINKS = true` writes approve and access links to
+the server log instead of emailing them. `python scripts/issue_access_link.py you@example.com
+--secrets .streamlit/secrets.toml` prints a personal link directly.
+
+**Deploy on Streamlit Community Cloud:** main file `streamlit_app.py`, Python 3.13, and paste the
+secrets from `.streamlit/secrets.toml.example` (Claude key, `ACCESS_SECRET`, owner email and
+passcode, Gmail SMTP app password, `APP_URL`, limits).
+
+**Full app (FastAPI + PostgreSQL):** see the setup below.
 
 ## Project structure
 
 ```
-college_cop/
+College-Copilot/
+├── streamlit_app.py           # Live demo: access gate, chat, school profile
 ├── backend/
-│   ├── main.py                # FastAPI app, /ask endpoint, answer summary
+│   ├── main.py                # FastAPI app: /ask, accounts, billing, pages
+│   ├── answering.py           # One question → answer (shared by both apps)
 │   ├── planner.py             # Claude tool-use planner
-│   ├── presentation.py        # Result rows → display blocks
-│   ├── school_lookup.py       # School name/alias resolution
+│   ├── guardrails.py          # Scope, ranking and "fewer results" rules
+│   ├── presentation.py        # Result rows → display blocks; summary number check
+│   ├── database.py            # PostgreSQL / DuckDB, validator, read-only runner
+│   ├── school_lookup.py       # School name/alias resolution (pg_trgm or Python)
 │   ├── locations.py           # ZIP/city → coordinates
 │   ├── similar_schools.py     # Similarity search
-│   ├── database.py            # Connections and the read-only query runner
-│   ├── source_data.py         # Shared helpers for the extra-source loaders
+│   ├── school_profile.py      # Profiles, compare tool, "I don't know" fallbacks
+│   ├── access.py              # Signed approve/access links, emails (demo)
+│   ├── cost_guard.py          # Question limits (demo)
+│   ├── demo_data.py           # Download and verify the DuckDB file (demo)
+│   ├── plans.py, billing.py   # Free/Pro plans and Stripe (full app)
+│   ├── user_data.py           # Supabase auth, saved schools, notes, reviews (full app)
 │   └── load_*.py              # Data loaders
-├── data/                      # Schema SQL, curated aliases; downloads (gitignored)
-├── docs/DATA_SOURCES.md       # Every source table and column
+├── scripts/
+│   ├── export_duckdb.py       # PostgreSQL → DuckDB demo file
+│   └── issue_access_link.py   # Print a personal access link
+├── data/                      # Schema SQL, curated aliases, duckdb_manifest.json
+├── docs/                      # DATA_SOURCES.md, screenshots
 ├── evals/                     # Question set with known answers + scorer
-├── frontend/landing.html      # Landing page at / (signed-in visitors go to /chat)
-├── frontend/chat.html         # Chat interface at /chat
+├── frontend/                  # Full app pages (landing, chat, school, compare, pricing)
 └── tests/
 ```
 
-## Setup
+## Data sources
+
+The core `schools` and `programs` tables come from the U.S. Department of Education
+**College Scorecard** (2015-16 to 2024-25). The other sources, each loaded by its own script: **IPEDS**
+(NCES), **Opportunity Insights** mobility, **Clery Act** campus crime, federal **cohort default
+rates**, **EADA** athletics, **NSF HERD** research spending, the **VA GI Bill** Comparison Tool,
+**DAPIP** accreditation, **IRS Form 990** via ProPublica, **BLS** wages and projections with
+**O*NET**, **Census ACS** demographics, **AACSB / Phi Beta Kappa / CTCL / QuestBridge / Posse**
+lists, and **Common App** deadlines. Every table and column: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
+
+## Full app setup (FastAPI + PostgreSQL)
 
 ### 1. Environment variables (`.env`)
 
@@ -91,9 +293,6 @@ python load_deadlines.py      # application deadlines from data/school_deadlines
 python document_sources.py    # regenerate docs/DATA_SOURCES.md
 ```
 
-Every table and column is described in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md). The planner
-sees all loaded tables with those descriptions; answers name the sources their query used.
-
 ### 4. Run the app
 
 ```bash
@@ -103,20 +302,9 @@ uvicorn main:app --reload --host 127.0.0.1 --port 8000
 
 Open **http://localhost:8000** for the landing page, or **/chat** for the chat. The API is on the same URL.
 
-## Testing
+## Guardrails, scoring and full-app features
 
-```bash
-python -m pytest tests/              # unit + database tests
-python backend/evals.py              # 30 end-to-end behavior checks (calls Claude, ~1 min)
-python evals/run_eval.py             # 70 exact answers vs. ground-truth SQL (calls Claude, ~2 min)
-```
-
-`backend/evals.py` runs questions through the whole pipeline (planner, guardrails, summary) and checks
-behavior: "Top ranked university in Washington" has UW-Seattle in the top 3, "Cheapest UC school" is
-sorted by net price, college lists contain no adult-education programs, empty results say so, and so on.
-Run one category with `python backend/evals.py safety`. Both suites exit non-zero on any failure.
-
-## Answer guardrails (`guardrails.py`)
+### Answer guardrails (`guardrails.py`)
 
 - **Wording-based scope, decided in code:** "universities" / "four-year" lists use Carnegie classes 15-23;
   "colleges" lists use degree-granting schools only (no adult-education or certificate-only programs).
@@ -131,7 +319,7 @@ Run one category with `python backend/evals.py safety`. Both suites exit non-zer
   highest paying → 10-year earnings (program earnings for a major); safest → crimes per 1,000 students
   at schools with 1,000+ students; best value → earnings per $1 of net price.
 
-## CollegeCopilot Score
+### CollegeCopilot Score
 
 Our own ranking of about 3,100 degree-granting colleges (`compute_scores.py`): 40% graduation rate,
 30% median earnings after 10 years, 20% selectivity (lower acceptance rate is better) and 10%
@@ -140,7 +328,7 @@ is robust to outliers, unlike min-max scaling; open-admission schools count as a
 `copilot_scores` (score, national rank, the four component scores) and `schools.copilot_score`. "Best" and
 "top ranked" questions sort by it, and answers say how it is built.
 
-## School pages, compare, deadlines, reviews
+### School pages, compare, deadlines, reviews
 
 - **`/school/<unitid>`**: photo, CollegeCopilot Score with its breakdown, key stats, application deadlines,
   majors by degree level, campus safety, reviews, and Save / Compare buttons (`school.html`, data from
@@ -157,7 +345,7 @@ is robust to outliers, unlike min-max scaling; open-admission schools count as a
   nickname found in the question), its website and profile, and questions we can answer.
 - Shared front-end code: `frontend/static/auth.js` (sign-in, Save hearts) and `common.css`.
 
-## Plans and payments (Stripe)
+### Plans and payments (Stripe)
 
 | | Free | Pro ($9/month) |
 |---|---|---|
@@ -193,7 +381,7 @@ Setup:
 4. Locally, `stripe listen --forward-to localhost:8000/api/webhook` prints a test signing secret. The
    pricing page also syncs the plan straight from Stripe after checkout, so upgrades show without it.
 
-## Logging, feedback and admin
+### Logging, feedback and admin
 
 - Every question is logged in `query_logs` (question, SQL or tool call, answer, response time, outcome).
 - 👍 / 👎 under each answer saves to `feedback` with the question and answer (one vote per answer).
@@ -212,7 +400,7 @@ Try questions like:
 5. "Which 5 schools have the highest earnings 4 years after a computer science bachelor's?"
 6. "Public colleges within 40 miles of 94720 with a graduation rate above 70%"
 
-## Accounts, saved schools and notes
+### Accounts, saved schools and notes
 
 Sign-in uses [Supabase Auth](https://supabase.com/docs/guides/auth) (email/password and Google).
 Without `SUPABASE_URL` / `SUPABASE_ANON_KEY` the app works as before, with no sign-in buttons.
@@ -232,6 +420,10 @@ Supabase dashboard setup:
    `https://<project>.supabase.co/auth/v1/callback`), then enable Authentication → Providers →
    Google with its client ID and secret. Until then the Google button says it isn't turned on.
 
-## Deploy
+### Deploy
 
-See `render.yaml` for Render.com deployment config.
+See `render.yaml` for the Render.com deployment of the full app.
+
+---
+
+**Gulnar Albushova**, UC Berkeley Master of Information and Data Science (MIDS) · [LinkedIn](https://www.linkedin.com/in/gulnar-albushova-253252140/) · [GitHub](https://github.com/Gunar-Oguz)
