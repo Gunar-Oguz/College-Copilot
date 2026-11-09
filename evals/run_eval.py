@@ -14,10 +14,15 @@ Usage (from the repo root, needs ANTHROPIC_API_KEY and Postgres):
     python evals/run_eval.py                 # run all cases
     python evals/run_eval.py --only lookup   # one category or case id
     python evals/run_eval.py --truth-only    # just check the truth SQL runs
+
+The ground truth always comes from PostgreSQL. To run the planner on the DuckDB demo database:
+    python evals/run_eval.py --backend duckdb --duckdb-path /path/to/collegecopilot.duckdb
+    python evals/run_eval.py --compare-truth --duckdb-path ...   # truth SQL gives the same rows on both
 """
 
 import argparse
 import json
+import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -34,7 +39,11 @@ load_dotenv(ROOT_DIR / ".env")
 load_dotenv(ROOT_DIR / "backend" / ".env")
 
 from database import MAX_ROWS, execute_sql  # noqa: E402
-from planner import plan_answer  # noqa: E402
+from planner import USAGE_FIELDS, plan_answer  # noqa: E402
+
+# Claude Haiku 4.5 prices per million tokens: input, output, cache write, cache read.
+PRICE_PER_MTOK = {"input_tokens": 1.00, "output_tokens": 5.00,
+                  "cache_creation_input_tokens": 1.25, "cache_read_input_tokens": 0.10}
 
 EVAL_DIR = Path(__file__).resolve().parent
 RESULTS_DIR = EVAL_DIR / "results"
@@ -155,13 +164,16 @@ def load_truth(case) -> list[dict]:
     return rows
 
 
-def run_case(case) -> dict:
+def run_case(case, truth=None) -> dict:
     result = {"id": case["id"], "category": case["category"], "question": case["question"]}
     start = time.perf_counter()
     try:
-        truth_rows = load_truth(case)
+        if isinstance(truth, Exception):
+            raise truth
+        truth_rows = truth if truth is not None else load_truth(case)
         answer = plan_answer(case["question"])
         result["trace"] = answer.trace
+        result["usage"] = answer.usage
         if case["check"] == "cannot_answer":
             passed = answer.kind == "cannot_answer"
             reason = "" if passed else "answered instead of saying it can't"
@@ -186,7 +198,16 @@ def main():
     parser.add_argument("--only", help="category or case id to run")
     parser.add_argument("--truth-only", action="store_true", help="only validate truth_sql")
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--backend", choices=["postgres", "duckdb"], default="postgres",
+                        help="database the planner uses (the truth always comes from PostgreSQL)")
+    parser.add_argument("--duckdb-path", help="DuckDB file for --backend duckdb (default: $DUCKDB_PATH)")
+    parser.add_argument("--compare-truth", action="store_true",
+                        help="check every truth_sql returns the same rows on PostgreSQL and DuckDB")
+    parser.add_argument("--label", default="", help="added to the results file name")
     args = parser.parse_args()
+    duckdb_path = args.duckdb_path or os.getenv("DUCKDB_PATH")
+    os.environ.pop("DUCKDB_PATH", None)
+    os.environ["DB_BACKEND"] = "postgres"
 
     cases = json.loads((EVAL_DIR / "questions.json").read_text())
     if args.only:
@@ -203,8 +224,22 @@ def main():
         print(f"{len(cases) - bad}/{len(cases)} truth queries OK")
         sys.exit(1 if bad else 0)
 
+    if args.compare_truth:
+        sys.exit(compare_truth(cases, duckdb_path))
+
+    truths = []
+    for case in cases:  # ground truth from PostgreSQL, before switching the planner's backend
+        try:
+            truths.append(load_truth(case))
+        except Exception as exc:
+            truths.append(exc)
+    if args.backend == "duckdb":
+        if not duckdb_path:
+            parser.error("--backend duckdb needs --duckdb-path or DUCKDB_PATH")
+        os.environ.update(DB_BACKEND="duckdb", DUCKDB_PATH=duckdb_path)
+
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        results = list(pool.map(run_case, cases))
+        results = list(pool.map(run_case, cases, truths))
 
     for r in results:
         mark = "PASS" if r["passed"] else "FAIL"
@@ -216,12 +251,42 @@ def main():
         group = [r for r in results if r["category"] == category]
         print(f"  {category:<14} {sum(r['passed'] for r in group)}/{len(group)}")
     total = sum(r["passed"] for r in results)
-    print(f"\nTOTAL {total}/{len(results)} ({100 * total / len(results):.0f}%)")
+    print(f"\nTOTAL {total}/{len(results)} ({100 * total / len(results):.0f}%) on {args.backend}")
+    usage = {name: sum(r.get("usage", {}).get(name, 0) for r in results) for name in USAGE_FIELDS}
+    cost = sum(usage[name] * PRICE_PER_MTOK[name] / 1e6 for name in USAGE_FIELDS)
+    print(f"Planner tokens: {usage} (about ${cost:.2f})")
 
     RESULTS_DIR.mkdir(exist_ok=True)
-    out = RESULTS_DIR / f"{datetime.now():%Y%m%d-%H%M%S}.json"
+    label = f"-{args.backend}{'-' + args.label if args.label else ''}"
+    out = RESULTS_DIR / f"{datetime.now():%Y%m%d-%H%M%S}{label}.json"
     out.write_text(json.dumps(results, indent=2, default=str))
     print(f"Details: {out}")
+
+
+def _comparable(rows: list[dict]) -> list[tuple]:
+    def norm(value):
+        number = _numeric(value)
+        return round(number, 6) if number is not None else value
+    return [tuple(norm(v) for v in row.values()) for row in rows]
+
+
+def compare_truth(cases, duckdb_path: str | None) -> int:
+    """Every truth_sql must give the same rows (numbers to 6 decimals) on both backends."""
+    if not duckdb_path:
+        raise SystemExit("--compare-truth needs --duckdb-path or DUCKDB_PATH")
+    cases = [c for c in cases if c.get("truth_sql")]
+    postgres = [_comparable(execute_sql(c["truth_sql"])) for c in cases]
+    os.environ.update(DB_BACKEND="duckdb", DUCKDB_PATH=duckdb_path)
+    bad = 0
+    for case, expected in zip(cases, postgres):
+        got = _comparable(execute_sql(case["truth_sql"]))
+        # Ties may come back in a different order; the scorers allow that too.
+        same = got == expected or sorted(map(repr, got)) == sorted(map(repr, expected))
+        if not same:
+            bad += 1
+            print(f"DIFF {case['id']}: postgres {expected[:3]} duckdb {got[:3]}")
+    print(f"{len(cases) - bad}/{len(cases)} truth queries give the same rows on PostgreSQL and DuckDB")
+    return 1 if bad else 0
 
 
 if __name__ == "__main__":
