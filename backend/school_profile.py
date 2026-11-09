@@ -5,10 +5,10 @@ Everything is read with application-written SQL from the latest year of schools 
 source tables (IPEDS, Clery, CollegeCopilot Score, deadlines, reviews, photos).
 """
 
-from database import execute_sql
-from photos import get_photo
+from database import backend, execute_sql, table_exists
 from school_lookup import resolve_school
-from user_data import review_summary
+
+NO_REVIEWS = {"average": None, "count": 0, "recent": []}
 
 CREDENTIAL_LABELS = {
     1: "Certificates", 2: "Associate's", 3: "Bachelor's", 4: "Post-bacc certificates",
@@ -44,7 +44,23 @@ FROM campus_crime WHERE school_id = %s
 
 
 def _table_exists(name: str) -> bool:
-    return execute_sql("SELECT to_regclass(%s) IS NOT NULL AS ok", (name,))[0]["ok"]
+    return table_exists(name)
+
+
+def review_summary(unitid: int, limit: int = 10) -> dict:
+    """Reviews live in PostgreSQL with the user tables; the DuckDB demo has none."""
+    if backend() == "duckdb":
+        return dict(NO_REVIEWS)
+    from user_data import review_summary as reviews
+    return reviews(unitid, limit=limit)
+
+
+def get_photo(unitid: int) -> dict | None:
+    """Wikimedia photo, cached in PostgreSQL; the DuckDB demo shows none (no writes, no network)."""
+    if backend() == "duckdb":
+        return None
+    from photos import get_photo as photo
+    return photo(unitid)
 
 
 def _website(row: dict) -> str | None:
@@ -70,7 +86,7 @@ def _shape(row: dict) -> dict:
     return {
         "id": row["id"], "name": row["name"], "city": row["city"], "state": row["state"],
         "type": OWNERSHIP.get(row["ownership"]), "website": _website(row), "url": f"/school/{row['id']}",
-        "locale": row["locale"], "carnegie": row["carnegie_basic"], "religious_affiliation": row["religious_affiliation"],
+        "locale": row["locale"], "carnegie": row["carnegie_basic"], "religious_affiliation": row["religious_affiliation"],  # noqa: E501
         "hbcu": row["hbcu"], "score": score,
         "stats": {
             "graduation_rate": row["completion_rate"], "acceptance_rate": row["admission_rate"],

@@ -1,10 +1,19 @@
-"""Resolve a school name or nickname (e.g. "UCLA", "UW") to candidate school ids."""
+"""Resolve a school name or nickname (e.g. "UCLA", "UW") to candidate school ids.
+
+On PostgreSQL the matching runs in SQL with pg_trgm. DuckDB has no pg_trgm, so on DuckDB the same
+trigram similarity is computed in Python over the latest year's names and aliases (cached), with
+the same thresholds, float4 rounding and ordering.
+"""
 
 import re
+import struct
+from decimal import ROUND_HALF_UP, Decimal
+from functools import lru_cache
 
-from database import execute_sql, get_latest_year
+from database import backend, database_token, execute_sql, get_latest_year
 
 MIN_SIMILARITY = 0.35
+TRGM_THRESHOLD = 0.3  # pg_trgm.similarity_threshold default, used by the % operator
 
 
 def normalize(text: str) -> str:
@@ -41,6 +50,61 @@ LIMIT %(limit)s
 """
 
 
+# ---------- pg_trgm in Python (DuckDB backend) ----------
+
+def trigrams(text: str) -> frozenset[str]:
+    """pg_trgm's trigrams: each lower-cased alphanumeric word padded with two spaces before, one after."""
+    grams = set()
+    for word in re.findall(r"[a-z0-9]+", text.lower()):
+        padded = f"  {word} "
+        grams.update(padded[i:i + 3] for i in range(len(padded) - 2))
+    return frozenset(grams)
+
+
+def _float4(value: float) -> float:
+    return struct.unpack("f", struct.pack("f", value))[0]
+
+
+def similarity(a: frozenset[str], b: frozenset[str]) -> float:
+    """pg_trgm similarity(): shared trigrams / all distinct trigrams, as a float4."""
+    shared = len(a & b)
+    union = len(a) + len(b) - shared
+    return _float4(shared / union) if union else 0.0
+
+
+def _round_score(score: float) -> float:
+    """round(score::numeric, 2): float4 -> numeric keeps 6 significant digits, then rounds half up."""
+    return float(Decimal(f"{score:.6g}").quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+@lru_cache(maxsize=4)
+def _name_index(_db: str, year: str) -> tuple[list[tuple], dict[int, dict]]:
+    schools = {r["id"]: r for r in execute_sql(
+        "SELECT id, name, city, state, student_size, latitude, longitude FROM schools WHERE year = %s", (year,))}
+    names = [(r["id"], r["name"], "name", re.sub(r"[^a-z0-9]+", " ", r["name"].lower())) for r in schools.values()]
+    names += [(r["school_id"], r["alias"], "alias", r["alias_norm"])
+              for r in execute_sql("SELECT school_id, alias, alias_norm FROM school_aliases")]
+    return [(sid, matched, kind, norm.strip(), trigrams(norm)) for sid, matched, kind, norm in names], schools
+
+
+def _resolve_in_python(query: str, year: str, limit: int) -> list[dict]:
+    names, schools = _name_index(database_token(), year)
+    query_grams = trigrams(query)
+    best: dict[int, tuple] = {}
+    for school_id, matched, kind, norm, grams in names:
+        sim = similarity(grams, query_grams)
+        if norm != query and sim < TRGM_THRESHOLD:
+            continue
+        score = 1.0 if norm == query else sim
+        if school_id not in best or score > best[school_id][0]:
+            best[school_id] = (score, matched, kind)
+    found = [(score, schools[sid], matched, kind) for sid, (score, matched, kind) in best.items()
+             if sid in schools and score >= MIN_SIMILARITY]
+    found.sort(key=lambda f: (-f[0], -(f[1]["student_size"] if f[1]["student_size"] is not None else -1), f[1]["id"]))
+    return [{**school, "matched": matched, "match_type": kind, "score": _round_score(score)}
+            for score, school, matched, kind in found[:limit]]
+
+
 def resolve_school(name: str, limit: int = 5) -> list[dict]:
     """Return up to `limit` candidate schools, best match first.
 
@@ -49,10 +113,13 @@ def resolve_school(name: str, limit: int = 5) -> list[dict]:
     query = normalize(name)
     if not query:
         return []
-    rows = execute_sql(
-        RESOLVE_SQL,
-        {"q": query, "year": get_latest_year(), "min_score": MIN_SIMILARITY, "limit": limit},
-    )
+    if backend() == "duckdb":
+        rows = _resolve_in_python(query, get_latest_year(), limit)
+    else:
+        rows = execute_sql(
+            RESOLVE_SQL,
+            {"q": query, "year": get_latest_year(), "min_score": MIN_SIMILARITY, "limit": limit},
+        )
     for row in rows:
         row["score"] = float(row["score"])
         for key in ("latitude", "longitude"):

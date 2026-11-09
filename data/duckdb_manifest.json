@@ -1,0 +1,9 @@
+{
+  "file": "collegecopilot.duckdb",
+  "sha256": "b71ac8ea5ff373c9dac8f399192447bbc765c9a73ad549c1acbbd4d585e2330e",
+  "bytes": 30420992,
+  "duckdb_version": "2.0.0",
+  "compression": "auto",
+  "built_with": "scripts/export_duckdb.py",
+  "release_tag": "data-v1"
+}

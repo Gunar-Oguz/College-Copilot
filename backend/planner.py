@@ -10,15 +10,17 @@ import os
 from dataclasses import dataclass, field
 
 import anthropic
-import psycopg2
 
-from database import UnsafeQueryError, get_latest_year, get_schema, run_readonly_query
+from database import DB_ERRORS, UnsafeQueryError, get_latest_year, get_schema, run_readonly_query
 from guardrails import question_hints
 from locations import resolve_location
 from school_lookup import resolve_school
 from similar_schools import find_similar_schools
 
 MAX_TOOL_ROUNDS = 8
+
+# Claude Haiku 4.5 is current (not deprecated) and fast and cheap for a tool-use planner.
+MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5")
 
 PREVIEW_ROWS = 20
 
@@ -204,6 +206,7 @@ class Answer:
     school_ids: list[int] = field(default_factory=list)  # schools named in the question, if resolved
     vague: bool = False  # clarify: the question gave no criteria at all
     standalone_question: str = ""  # a follow-up rewritten to stand on its own
+    usage: dict = field(default_factory=dict)  # tokens used by the planner for this question
 
 
 _client = None
@@ -266,7 +269,7 @@ RULES:
 - If a named school can't be found or the data can't answer the question, submit cannot_answer.
   Subjective quality (best dorms, food, social life, prestige) is not in the data: cannot_answer.
 
-Finish by calling submit_answer."""
+Finish by calling submit_answer."""  # noqa: E501
 
 
 class _Session:
@@ -314,7 +317,7 @@ class _Session:
                     return json.dumps({"error": "Select school_deadlines.unitid, deadline_type and deadline_date, "
                                                 "then run the query again."})
                 return self._store(args["sql"], rows)
-        except (UnsafeQueryError, psycopg2.Error, ValueError, TypeError, KeyError) as exc:
+        except (UnsafeQueryError, *DB_ERRORS, ValueError, TypeError, KeyError) as exc:
             message = getattr(exc, "pgerror", None) or str(exc)
             return json.dumps({"error": message.strip()})
         return json.dumps({"error": f"unknown tool {name}"})
@@ -347,7 +350,21 @@ def history_text(history: list[dict]) -> str:
     return f"EARLIER IN THIS CONVERSATION (oldest first; only for understanding follow-ups):\n{turns}\n\n"
 
 
+USAGE_FIELDS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+
+
+def add_usage(total: dict, usage) -> None:
+    for name in USAGE_FIELDS:
+        total[name] = total.get(name, 0) + (getattr(usage, name, 0) or 0)
+
+
 def plan_answer(question: str, history: list[dict] | None = None) -> Answer:
+    answer = _plan(question, history, usage := {})
+    answer.usage = usage
+    return answer
+
+
+def _plan(question: str, history: list[dict] | None, usage: dict) -> Answer:
     session = _Session()
     system = [{
         "type": "text",
@@ -361,13 +378,14 @@ def plan_answer(question: str, history: list[dict] | None = None) -> Answer:
     messages = [{"role": "user", "content": content}]
     for _ in range(MAX_TOOL_ROUNDS):
         message = _get_client().messages.create(
-            model=os.getenv("CLAUDE_MODEL", "claude-haiku-4-5"),
+            model=MODEL,
             max_tokens=1500,
             system=system,
             tools=TOOLS,
             tool_choice={"type": "any"},
             messages=messages,
         )
+        add_usage(usage, message.usage)
         results = []
         for block in message.content:
             if block.type != "tool_use":

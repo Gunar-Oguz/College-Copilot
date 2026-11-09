@@ -8,7 +8,7 @@ among schools offering the same highest degree, with penalties when ownership
 import math
 from functools import lru_cache
 
-from database import execute_sql, get_latest_year
+from database import database_token, execute_sql, get_latest_year
 
 # column -> (weight, label)
 FEATURES = {
@@ -33,8 +33,8 @@ OUTPUT_COLUMNS = (
 )
 
 
-@lru_cache(maxsize=2)
-def _load_pool(year: str) -> tuple[dict[int, dict], dict[str, tuple[float, float]]]:
+@lru_cache(maxsize=4)
+def _load_pool(_db: str, year: str) -> tuple[dict[int, dict], dict[str, tuple[float, float]]]:
     rows = execute_sql(
         """
         SELECT id, name, city, state, ownership, carnegie_class, highest_degree,
@@ -96,7 +96,7 @@ def find_similar_schools(
     admission: 'easier' (higher acceptance rate than the reference), 'harder', or 'any'.
     cheaper: only schools with a lower average net price than the reference.
     """
-    schools, stats = _load_pool(get_latest_year())
+    schools, stats = _load_pool(database_token(), get_latest_year())
     target = schools.get(school_id)
     if target is None:
         raise ValueError(f"No school with id {school_id} in the latest year")
