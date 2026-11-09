@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Gunar-Oguz/College-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Gunar-Oguz/College-Copilot/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%20%7C%203.13-blue)
-![Tests](https://img.shields.io/badge/tests-308%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-331%20passing-brightgreen)
 ![Ruff](https://img.shields.io/badge/lint-ruff-261230)
 
 An AI college-search assistant for admissions counselors. You ask about U.S. colleges in plain
@@ -14,15 +14,16 @@ every number from the result rows.
 ### [▶ Open the live app](https://college-copilot-gulnar.streamlit.app)
 
 > **Access is by approval:** enter your email on the app, I receive a request and approve it, and
-> you get a personal link by email. This protects the paid AI API behind every answer.
+> you get a personal link by email. This protects the paid AI API behind every answer. Each approved
+> visitor gets 5 questions a day.
 
 | Net price for a family income (stat tiles) | Side-by-side comparison | Ranked chart |
 |---|---|---|
 | ![Stat tiles](docs/screenshots/1-stat-tiles.png) | ![Comparison](docs/screenshots/2-comparison.png) | ![Ranked bars](docs/screenshots/3-ranked-bars.png) |
 
-| School profile | Access request |
-|---|---|
-| ![School profile](docs/screenshots/5-school-profile.png) | ![Access request](docs/screenshots/4-access-request.png) |
+| School profile | Access request | Plans (shown when the daily questions run out) |
+|---|---|---|
+| ![School profile](docs/screenshots/5-school-profile.png) | ![Access request](docs/screenshots/4-access-request.png) | ![Plans](docs/screenshots/6-plans.png) |
 
 ## Features
 
@@ -35,6 +36,10 @@ every number from the result rows.
 - **Clarifying questions** when a name is ambiguous ("UW": Washington or Wisconsin?), quick replies
   for vague questions, and honest "I don't know" answers with what *is* known about the school.
 - **CollegeCopilot Score**: a transparent ranking of about 3,100 degree-granting colleges.
+- **Demo limits and plans**: 5 questions per approved visitor per day, shown in the sidebar
+  ("3 of 5 questions left"). When they run out, a Free vs Pro ($9/month) plan view replaces the chat
+  input. Payments are not connected in the demo, so "Upgrade to Pro — coming soon" explains that and
+  offers a "Request Pro access" email link; the full app takes payments with Stripe.
 - **25 public data sources** (College Scorecard, IPEDS and others); every table and column is
   documented in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 
@@ -70,8 +75,10 @@ sequenceDiagram
 2. **Guardrails** (`backend/guardrails.py`): decided in code, not left to the model (see below).
 3. **Presentation** (`backend/presentation.py`): rows become stat tiles, a comparison table, ranked
    bars or a table. Every number shown is formatted from the data. Claude writes only a one- or
-   two-sentence summary, and the summary is **replaced by a plain one if it cites any number that is
-   not in the rows**.
+   two-sentence summary, which is checked in code before it is shown: every number must be in the
+   rows **and belong to the school named next to it**, superlatives ("highest graduation rate") must
+   be true for that column, and "higher/lower ... A vs B" must match A and B. A summary that fails is
+   rewritten once with the problems listed, then replaced by a plain summary written in code.
 
 ## Architecture
 
@@ -115,36 +122,28 @@ same questions and the same truth.
 | `resolve_location` on ZIP codes and cities | **10 / 10** |
 | Planner system prompt | identical except one dropped column (`programs.id`) |
 
-**Model evals, measured 2026-11-09** (Claude Haiku 4.5, same questions and same ground truth on both
-backends):
+**Model evals, measured 2026-11-09** (Claude Haiku 4.5, same questions and the same ground truth on
+both backends):
 
 | Suite | PostgreSQL | DuckDB (demo) |
 |---|---|---|
-| `evals/run_eval.py`: 70 questions with ground-truth SQL | **63 / 70 (90%)** | **64 / 70 (91%)** |
+| `evals/run_eval.py`: 70 questions with ground-truth SQL | 63 / 70 (90%)¹ | **70 / 70 (100%)** |
 | `backend/evals.py`: 34 end-to-end behavior checks | **34 / 34** | **34 / 34** |
 
-| Category (run_eval) | n | PostgreSQL | DuckDB |
-|---|---:|---:|---:|
-| lookup, count, aggregate, comparison, programs, trend | 27 | 27 | 27 |
-| ambiguous names (must ask) and unanswerable (must refuse) | 12 | 12 | 12 |
-| extra sources (IPEDS, mobility, research, designations, ...) | 9 | 9 | 9 |
-| ranking | 9 | 7 | 7 |
-| net price by income | 5 | 4 | 4 |
-| similar schools | 4 | 2 | 3 |
-| distance from a ZIP / city / school | 4 | 2 | 2 |
+¹ PostgreSQL figure from the earlier run, before five ground-truth queries were updated (below); in
+that run DuckDB scored 64 / 70 with the same six shared failures, and no question failed on DuckDB only.
 
-No question failed on DuckDB only. Six failures are the same on both backends, and five of them come
-from one deliberate product rule: since #21, lists of "schools" are limited to bachelor's-granting
-institutions (`highest_degree >= 3`), while those older ground-truth queries count every
-institution (for example "Which 5 schools have the lowest acceptance rate?"). The sixth asks for
-5 similar schools and gets 10. The one extra PostgreSQL failure (`similar-ucla-easier`) is the
-model writing its own SQL instead of calling `find_similar_schools` in that run; it is not a
-database difference. The planner tokens for the two 70-question runs cost about $0.58 each.
+Five of those shared failures were stale ground truth, not wrong answers: since #21, lists of
+"schools" or "colleges" are limited to bachelor's-granting institutions (`highest_degree >= 3`), and
+those truth queries still counted every institution. They now follow the rule. Each 70-question run
+costs about $0.50 in planner tokens.
 
-**Known limitation.** The summary check proves that every number in the sentence exists in the
-data, not that it is attached to the right school. In comparisons of three or more schools, Haiku
-sometimes credits a correct number to the wrong school; the table and chart below the sentence are
-always right, because code builds them. A per-school attribution check is the next improvement.
+**Summary attribution, measured 2026-11-09.** Ten multi-school comparisons ("Compare UCLA, UC Berkeley
+and the University of Michigan on ...") were run twice through the whole pipeline with the real API.
+Of the 20 summaries, 15 were accepted as written, 4 after one rewrite and 1 was replaced by the plain
+summary. The rejected drafts included real misattributions such as "UC Berkeley has the highest
+graduation rate at 93.2%" (Michigan's rate) and "Princeton is the most selective at 3.6%". Every
+summary that reached the UI was checked by hand against its rows: zero misattributions.
 
 ## Security
 
@@ -163,7 +162,7 @@ always right, because code builds them. A per-school attribution check is the ne
   Approving needs a button press, so email link scanners cannot approve by opening the link. The
   request form gives the same reply whatever happens, is rate-limited per session and globally, and
   never reveals whether an email was approved.
-- **Cost caps.** 20 questions per visitor per UTC day and 200 per day for the whole demo (both
+- **Cost caps.** 5 questions per visitor per UTC day and 200 per day for the whole demo (both
   configurable). Questions answered without the AI are not counted.
 - **Verified data.** The demo downloads the database once and checks its SHA-256 against
   [data/duckdb_manifest.json](data/duckdb_manifest.json) before opening it.
@@ -173,7 +172,7 @@ always right, because code builds them. A per-school attribution check is the ne
 ```bash
 pip install -r requirements-dev.txt
 ruff check .
-python -m pytest            # 308 tests; PostgreSQL tests skip when no database is reachable
+python -m pytest            # 331 tests; PostgreSQL tests skip when no database is reachable
 ```
 
 - DuckDB backend tests run on a tiny synthetic database built in a temporary folder
@@ -182,8 +181,11 @@ python -m pytest            # 308 tests; PostgreSQL tests skip when no database 
   similar schools, guardrails and school profiles.
 - Access gate (sign/verify, tampering, expiry, wrong purpose, emails, SMTP over TLS), cost guard
   (limits, UTC rollover, thread safety) and the data download (hash check, cache, corrupt cache).
+- Summary attribution: real misattributed summaries the model wrote are rejected, correct ones pass,
+  and the rewrite-once-then-fallback path is tested with a fake Claude client.
 - Streamlit `AppTest` smoke tests: the gate, a valid link opening the chat, an answer rendered as
-  stat tiles, follow-ups, limits, the request and approve flow, owner passcode, school profile.
+  stat tiles, follow-ups, the limit reached and the upgrade view (no planner call), the plans link,
+  the request and approve flow, owner passcode, school profile.
   The answer pipeline is replaced by a fake, so tests make no API or network calls.
 - GitHub Actions ([ci.yml](.github/workflows/ci.yml)) runs ruff and pytest on Python 3.11 and 3.13.
 
