@@ -7,8 +7,8 @@ import re
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-HIDDEN_COLUMNS = {"id", "school_id", "unitid", "role", "year", "latitude", "longitude", "carnegie_class", "highest_degree"}
-TEXT_COLUMNS = {"name", "title", "soc_code", "city", "state", "program_name", "credential_name", "cip_code", "school_url"}
+HIDDEN_COLUMNS = {"id", "school_id", "unitid", "role", "year", "latitude", "longitude", "carnegie_class", "highest_degree"}  # noqa: E501
+TEXT_COLUMNS = {"name", "title", "soc_code", "city", "state", "program_name", "credential_name", "cip_code", "school_url"}  # noqa: E501
 MAX_BARS = 25
 MAX_COMPARE_SCHOOLS = 6
 MIN_COMPARE_METRICS = 2
@@ -163,7 +163,7 @@ def _school_id(row: dict) -> int | None:
 
 
 def _label_for_row(row: dict) -> str:
-    return str(row.get("name") or row.get("program_name") or row.get("title") or row.get("school_type") or row.get("state") or "Result")
+    return str(row.get("name") or row.get("program_name") or row.get("title") or row.get("school_type") or row.get("state") or "Result")  # noqa: E501
 
 
 def _stats_block(row: dict, columns: list[str]) -> dict:

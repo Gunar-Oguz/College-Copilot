@@ -126,7 +126,7 @@ class TestUnsupportedNumbers:
     def test_numbers_from_question_are_allowed(self):
         assert unsupported_numbers("The 5 closest matches.", self.ROWS, "Find 5 schools like UCLA") == []
 
-    @pytest.mark.parametrize("summary", ["For a family making $60,000, UCLA costs $12,548.", "At $60k, UCLA costs $12,548."])
+    @pytest.mark.parametrize("summary", ["For a family making $60,000, UCLA costs $12,548.", "At $60k, UCLA costs $12,548."])  # noqa: E501
     def test_thousands_shorthand_matches_full_number(self, summary):
         assert unsupported_numbers(summary, self.ROWS, "My family makes $60k") == []
 
@@ -142,7 +142,7 @@ class TestDistance:
 
 
 def test_millions_and_billions_match_full_numbers():
-    rows = [{"name": "Howard University", "endowment_amount": 926633000}, {"name": "Harvard", "endowment_amount": 50748594000}]
+    rows = [{"name": "Howard University", "endowment_amount": 926633000}, {"name": "Harvard", "endowment_amount": 50748594000}]  # noqa: E501
     assert unsupported_numbers("Howard has $927 million and Harvard $50.7 billion.", rows, "") == []
     assert unsupported_numbers("Howard has $900 million.", rows, "") == ["900 million"]
 
@@ -154,7 +154,7 @@ def test_booleans_show_yes_no():
 
 def test_dates_in_rows_allow_their_numbers():
     import datetime
-    rows = [{"name": "Ohio State", "accredited_since": datetime.date(1913, 1, 1), "latest_action_date": datetime.date(2017, 7, 31)}]
+    rows = [{"name": "Ohio State", "accredited_since": datetime.date(1913, 1, 1), "latest_action_date": datetime.date(2017, 7, 31)}]  # noqa: E501
     assert unsupported_numbers("Accredited since 1913, renewed July 31, 2017.", rows, "") == []
 
 

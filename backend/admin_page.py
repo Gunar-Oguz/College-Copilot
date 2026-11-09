@@ -53,7 +53,7 @@ PAGE = """<!DOCTYPE html>
   <section><h2>Latest questions</h2>{recent}</section>
 </main>
 </body>
-</html>"""
+</html>"""  # noqa: E501
 
 
 def _tile(label: str, value, sub: str = "", cls: str = "") -> str:

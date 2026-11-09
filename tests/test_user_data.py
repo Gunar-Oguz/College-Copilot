@@ -99,7 +99,7 @@ def test_users_cannot_see_or_change_each_others_data(client):
     client.put(f"/me/favorites/{UCLA}", headers=auth("token-a"))
     note = client.post(f"/me/favorites/{UCLA}/notes", json={"note_text": "private"}, headers=auth("token-a")).json()
     assert client.get("/me/favorites", headers=auth("token-b")).json()["favorites"] == []
-    assert client.put(f"/me/notes/{note['id']}", json={"note_text": "hacked"}, headers=auth("token-b")).status_code == 404
+    assert client.put(f"/me/notes/{note['id']}", json={"note_text": "hacked"}, headers=auth("token-b")).status_code == 404  # noqa: E501
     assert client.delete(f"/me/notes/{note['id']}", headers=auth("token-b")).status_code == 404
     client.delete(f"/me/favorites/{UCLA}", headers=auth("token-b"))
     assert client.get("/me/favorite-ids", headers=auth("token-a")).json() == {"ids": [UCLA]}

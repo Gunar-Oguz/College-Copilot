@@ -42,7 +42,7 @@ def _db_available() -> bool:
     ("Which colleges are within 30 miles of Austin?", COLLEGES_HINT),
     ("How many for-profit colleges are there?", ""),
     ("What is the average acceptance rate of public colleges in Ohio?", ""),
-    ("Which schools have the most students?", ""),
+    ("Which schools have the most students?", COLLEGES_HINT),  # "schools" lists are bachelor's-granting (#21)
     ("What is the graduation rate at Columbia College in Missouri?", ""),
 ])
 def test_question_hints(question, hint):
@@ -83,7 +83,9 @@ def test_college_lists_drop_non_degree_programs():
     assert [r["id"] for r in kept] == [ucla]
     assert "Left out 1" in notes[0]
     kept, _ = check_answer("Top schools in California by graduation rate", rows, "")
-    assert len(kept) == 2  # "schools" keeps every institution
+    assert [r["id"] for r in kept] == [ucla]  # "schools" lists are bachelor's-granting too (#21)
+    kept, _ = check_answer("How many institutions in California?", rows, "")
+    assert len(kept) == 2  # counts keep every institution
 
 
 def test_score_rankings_explain_the_formula():
@@ -105,7 +107,7 @@ def test_schools_named_in(question, ids):
 
 
 @pytest.mark.parametrize("question, rows, summary, expected", [
-    ("Which colleges give the most financial aid?", [{"cost_avg_net_price": 5000}], "X has the lowest net price.", True),
+    ("Which colleges give the most financial aid?", [{"cost_avg_net_price": 5000}], "X has the lowest net price.", True),  # noqa: E501
     ("Best scholarships in Ohio", [{"cost_net_price_income_0_30k": 900}], "Y is cheapest.", True),
     ("Which colleges give the most financial aid?", [{"cost_avg_net_price": 5000}],
      "X has the lowest net price, what students pay after financial aid.", False),

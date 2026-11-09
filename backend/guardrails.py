@@ -19,7 +19,7 @@ UNIVERSITY_RE = re.compile(
 )
 COLLEGES_RE = re.compile(
     r"\bcolleges\b|\buniversities\b|\bschools\b|\bfour[- ]year\b|\b4[- ]year\b"
-    r"|\b(top|best|top[- ]ranked|highest[- ]ranked|ranked|cheapest|safest)\s+(\w+\s+){0,2}(college|university|school)\b",
+    r"|\b(top|best|top[- ]ranked|highest[- ]ranked|ranked|cheapest|safest)\s+(\w+\s+){0,2}(college|university|school)\b",  # noqa: E501
     re.IGNORECASE,
 )
 # Counts and averages keep every institution; the scope rules are for lists and rankings.

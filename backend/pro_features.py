@@ -183,7 +183,7 @@ def save_profile(user_id: str, profile: dict) -> dict:
         INSERT INTO user_profiles (user_id, {', '.join(PROFILE_FIELDS)}, updated_at)
         VALUES (%s, {', '.join(['%s'] * len(PROFILE_FIELDS))}, NOW())
         ON CONFLICT (user_id) DO UPDATE SET {', '.join(f'{f} = EXCLUDED.{f}' for f in PROFILE_FIELDS)}, updated_at = NOW()
-    """, (user_id, *values))
+    """, (user_id, *values))  # noqa: E501
     return get_profile(user_id)
 
 
@@ -299,7 +299,7 @@ def fit_facts(unitid: int, profile: dict) -> dict | None:
             checks.append({"area": "Your major", "status": "good", "detail": detail})
         else:
             checks.append({"area": "Your major", "status": "concern",
-                           "detail": f"No bachelor's program matching \"{major}\" in the data. Check the school's catalog."})
+                           "detail": f"No bachelor's program matching \"{major}\" in the data. Check the school's catalog."})  # noqa: E501
 
     # Outcomes
     if s["completion_rate"] is not None or s["earnings_median_10yr"] is not None:
@@ -317,7 +317,7 @@ def fit_facts(unitid: int, profile: dict) -> dict | None:
         lo, hi = SIZES[profile["preferred_size"]]
         fits = lo <= s["student_size"] < hi
         checks.append({"area": "Size", "status": "good" if fits else "concern",
-                       "detail": f"{s['student_size']:,} undergraduates; you prefer a {profile['preferred_size']} school."})
+                       "detail": f"{s['student_size']:,} undergraduates; you prefer a {profile['preferred_size']} school."})  # noqa: E501
 
     return {
         "school": {"id": s["id"], "name": s["name"], "state": s["state"],

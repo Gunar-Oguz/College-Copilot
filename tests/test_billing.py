@@ -194,7 +194,7 @@ def test_webhook_subscription_lifecycle(client, stripe_env):
         payload, sig = _signed(event)
         return client.post("/api/webhook", content=payload, headers={"stripe-signature": sig})
 
-    assert send(_subscription_event("evt_test_1", "active", event_type="customer.subscription.created")).status_code == 200
+    assert send(_subscription_event("evt_test_1", "active", event_type="customer.subscription.created")).status_code == 200  # noqa: E501
     plan = plans.get_plan("test-bill-free")
     assert plan["plan"] == "pro" and plan["current_period_end"].year == 2030
     send(_subscription_event("evt_test_2", "past_due"))
