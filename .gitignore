@@ -26,3 +26,11 @@ evals/results/
 
 # Google OAuth client secrets (keep out of git)
 client_secret_*.json
+
+# Streamlit secrets (template: .streamlit/secrets.toml.example)
+.streamlit/secrets.toml
+
+# DuckDB demo database (built by scripts/export_duckdb.py, published as a GitHub Release asset)
+*.duckdb
+*.duckdb.wal
+!data/duckdb_manifest.json

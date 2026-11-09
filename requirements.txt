@@ -1,0 +1,7 @@
+# Streamlit Community Cloud demo (streamlit_app.py). The full FastAPI app uses backend/requirements.txt.
+streamlit==1.67.0
+duckdb==2.0.0
+anthropic==0.105.2
+pandas==3.1.1
+altair==6.3.0
+pydantic==2.13.4
